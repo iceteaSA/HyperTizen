@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -26,21 +26,55 @@ namespace HyperTizen
         private static byte[] managedArrayUV;
         public static void InitCapture()
         {
+            Helper.Log.Write(Helper.eLogType.Info, $"InitCapture: Tizen {SystemInfo.TizenVersionMajor}.{SystemInfo.TizenVersionMinor} detected");
+            
             try
             {
+                Helper.Log.Write(Helper.eLogType.Info, "InitCapture: Prelinking SecVideoCapture library...");
                 Marshal.PrelinkAll(typeof(SDK.SecVideoCapture));
+                Helper.Log.Write(Helper.eLogType.Info, "InitCapture: Prelink OK");
             }
-            catch
+            catch (Exception ex)
             {
-                Helper.Log.Write(Helper.eLogType.Error, "VideoCapture.InitCapture() Error: Libarys not found. Check if your Tizenversion is supported");
+                Helper.Log.Write(Helper.eLogType.Error, 
+                    $"InitCapture: Prelink FAILED - {ex.GetType().Name}: {ex.Message}");
+                throw; // Re-throw to be caught by caller
+            }
+
+            // Initialize SecVideoCapture for Tizen 8+ (only once!)
+            if (SystemInfo.TizenVersionMajor >= 8)
+            {
+                Helper.Log.Write(Helper.eLogType.Info, "InitCapture: Tizen 8+ detected, trying SecVideoCaptureT8...");
+                try
+                {
+                    SDK.SecVideoCaptureT8.Init();
+                    Helper.Log.Write(Helper.eLogType.Info, "InitCapture: SecVideoCaptureT8 OK");
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, 
+                        $"InitCapture: T8 SDK failed ({ex.Message}), trying T7 API as fallback...");
+                    // Let it fall through to use T7 API even on Tizen 8
+                    Helper.Log.Write(Helper.eLogType.Info, "InitCapture: Using T7 API on Tizen 8 (compatibility mode)");
+                }
+            }
+            else
+            {
+                Helper.Log.Write(Helper.eLogType.Info, $"InitCapture: Tizen {SystemInfo.TizenVersionMajor} detected, using SecVideoCaptureT7");
             }
 
             int NV12ySize = Globals.Instance.Width * Globals.Instance.Height;
             int NV12uvSize = (Globals.Instance.Width * Globals.Instance.Height) / 2; // UV-Plane is half as big as Y-Plane in NV12
+            
+            Helper.Log.Write(Helper.eLogType.Info, 
+                $"InitCapture: Allocating buffers ({NV12ySize} + {NV12uvSize} = {NV12ySize + NV12uvSize} bytes)...");
+            
             pImageY = Marshal.AllocHGlobal(NV12ySize);
             pImageUV = Marshal.AllocHGlobal(NV12uvSize);
             managedArrayY = new byte[NV12ySize];
             managedArrayUV = new byte[NV12uvSize];
+            
+            Helper.Log.Write(Helper.eLogType.Info, "InitCapture: Buffer allocation OK");
 
             int TizenVersionMajor = SystemInfo.TizenVersionMajor;
             int TizenVersionMinor = SystemInfo.TizenVersionMinor;
@@ -49,6 +83,9 @@ namespace HyperTizen
             int ScreenWidth = SystemInfo.ScreenWidth;
             int ScreenHeight = SystemInfo.ScreenHeight;
             string ModelName = SystemInfo.ModelName;
+            
+            Helper.Log.Write(Helper.eLogType.Info, 
+                $"InitCapture: System Info - Model:{ModelName} Screen:{ScreenWidth}x{ScreenHeight} ImgCap:{ImageCapture} VidRec:{VideoRecording}");
 
         }
 
@@ -84,18 +121,21 @@ namespace HyperTizen
                 if(isRunning)
                     switch (result)
                     {
+                        case -99:
+                            Helper.Log.Write(Helper.eLogType.Error, "SDK.SecVideoCapture.CaptureScreen Result: -99 [SDK not initialized]. Video capture SDK failed to initialize. Check Tizen version compatibility.");
+                            break;
                         case -4:
                             Helper.Log.Write(Helper.eLogType.Error, "SDK.SecVideoCapture.CaptureScreen Result: -4 [Netflix/ Widevine Drm Error]. Seems like you are watching DRM protected content. Capture is not supported for that yet");
                             break;
                         case -1:
-                            Helper.Log.Write(Helper.eLogType.Error, "SDK.SecVideoCapture.CaptureScreen Result: -1 [Input Pram is wrong / req size less or equal that crop size / non video for videoonly found]. This can occur when Settings or Video Inputs of the TV change. Check in HyperHDR if the Live-View is still showing an image.");
+                            Helper.Log.Write(Helper.eLogType.Error, "SDK.SecVideoCapture.CaptureScreen Result: -1 [Input Param is wrong / req size less or equal that crop size / non video for videoonly found]. This can occur when Settings or Video Inputs of the TV change. Check in HyperHDR if the Live-View is still showing an image.");
                             break;
                         case -2:
                             Helper.Log.Write(Helper.eLogType.Error, "SDK.SecVideoCapture.CaptureScreen Result: -2 [capture type %s, plane %s video only %d / Failed scaler_capture]. Please try restarting the TV (coldboot)");
                             //Application.Current.Exit();
                             break;
                         default:
-                            Helper.Log.Write(Helper.eLogType.Error, "SDK.SecVideoCapture.CaptureScreen Result: "+ result + " New Error Occured. Please report the shown Number on Github. Also enable every Log Option in the UI, run the Service in Debug Mode and send the Logs.");
+                            Helper.Log.Write(Helper.eLogType.Error, "SDK.SecVideoCapture.CaptureScreen Result: "+ result + " New Error Occurred. Please report the shown Number on Github. Also enable every Log Option in the UI, run the Service in Debug Mode and send the Logs.");
                             break;
                     }
                 isRunning = false;

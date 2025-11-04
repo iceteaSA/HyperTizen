@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.WebSockets;
@@ -72,6 +72,15 @@ namespace HyperTizen.WebSocket
                     {
                         var devices = await ScanSSDPAsync();
                         string resultEvent = JsonConvert.SerializeObject(new SSDPScanResultEvent(devices));
+                        await SendAsync(webSocket, resultEvent);
+                        break;
+                    }
+
+                case Event.GetLogs:
+                    {
+                        var logs = Helper.Log.GetRecentLogs();
+                        string logPath = Helper.Log.GetWorkingLogPath();
+                        string resultEvent = JsonConvert.SerializeObject(new LogsResultEvent(logs, logPath));
                         await SendAsync(webSocket, resultEvent);
                         break;
                     }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -29,24 +29,76 @@ namespace HyperTizen
 
         public static void SendRegister()
         {
-            client = new TcpClient(Globals.Instance.ServerIp, Globals.Instance.ServerPort);
-            if (client == null)
-                return;
-            stream = Networking.client.GetStream();
-            if (stream == null)
-                return;
-            byte[] registrationMessage = Networking.CreateRegistrationMessage();
-            if (registrationMessage == null)
-                return;
-            var header = new byte[4];
-            header[0] = (byte)((registrationMessage.Length >> 24) & 0xFF);
-            header[1] = (byte)((registrationMessage.Length >> 16) & 0xFF);
-            header[2] = (byte)((registrationMessage.Length >> 8) & 0xFF);
-            header[3] = (byte)((registrationMessage.Length) & 0xFF);
-            stream.Write(header, 0, header.Length);
-            stream.Write(registrationMessage, 0, registrationMessage.Length);
-            ReadRegisterReply();
-            Helper.Log.Write(Helper.eLogType.Info, "SendRegister: Data sent");
+            try
+            {
+                // Validate before connecting
+                if (string.IsNullOrEmpty(Globals.Instance.ServerIp) || Globals.Instance.ServerPort <= 0)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, 
+                        $"TCP FAILED: Bad config {Globals.Instance.ServerIp ?? "null"}:{Globals.Instance.ServerPort}");
+                    return;
+                }
+
+                Helper.Log.Write(Helper.eLogType.Info, 
+                    $"TCP: Connecting to {Globals.Instance.ServerIp}:{Globals.Instance.ServerPort}");
+
+                client = new TcpClient(Globals.Instance.ServerIp, Globals.Instance.ServerPort);
+                
+                Helper.Log.Write(Helper.eLogType.Info, "TCP: Socket created");
+                
+                if (client == null || !client.Connected)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, "TCP FAILED: Client null/not connected");
+                    return;
+                }
+
+                Helper.Log.Write(Helper.eLogType.Info, "TCP: Connected! Getting stream...");
+                
+                stream = Networking.client.GetStream();
+                if (stream == null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, "TCP FAILED: No stream");
+                    return;
+                }
+
+                Helper.Log.Write(Helper.eLogType.Info, "TCP: Stream OK, creating FlatBuffer msg...");
+
+                byte[] registrationMessage = Networking.CreateRegistrationMessage();
+                if (registrationMessage == null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, "TCP FAILED: No FlatBuffer message");
+                    return;
+                }
+
+                Helper.Log.Write(Helper.eLogType.Info, $"TCP: Sending {registrationMessage.Length} bytes...");
+
+                var header = new byte[4];
+                header[0] = (byte)((registrationMessage.Length >> 24) & 0xFF);
+                header[1] = (byte)((registrationMessage.Length >> 16) & 0xFF);
+                header[2] = (byte)((registrationMessage.Length >> 8) & 0xFF);
+                header[3] = (byte)((registrationMessage.Length) & 0xFF);
+                
+                stream.Write(header, 0, header.Length);
+                stream.Write(registrationMessage, 0, registrationMessage.Length);
+                
+                Helper.Log.Write(Helper.eLogType.Info, "TCP: Data sent, waiting for reply...");
+                
+                ReadRegisterReply();
+                
+                Helper.Log.Write(Helper.eLogType.Info, "TCP OK: Fully registered!");
+            }
+            catch (SocketException ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, 
+                    $"SOCKET ERROR: {ex.Message} (Code:{ex.ErrorCode})");
+                DisconnectClient();
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, 
+                    $"ERROR: {ex.GetType().Name}: {ex.Message}");
+                DisconnectClient();
+            }
         }
 
         public static async Task SendImageAsync(byte[] yData, byte[] uvData, int width, int height)
@@ -126,18 +178,54 @@ namespace HyperTizen
 
         public static void ReadRegisterReply()
         {
-            if (client == null || !client.Connected || stream == null)
-                return;
-
-            byte[] buffer = new byte[1024];
-            int bytesRead = stream.Read(buffer, 0, buffer.Length);
-            if (bytesRead > 0)
+            try
             {
-                byte[] replyData = new byte[bytesRead];
-                Array.Copy(buffer, replyData, bytesRead);
+                if (client == null || !client.Connected || stream == null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, "ReadRegisterReply: No client/stream");
+                    return;
+                }
 
-                Reply reply = ParseReply(replyData);
-                Helper.Log.Write(Helper.eLogType.Info, $"ReadRegisterReply: Reply_Registered: {reply.Registered}");
+                Helper.Log.Write(Helper.eLogType.Info, "ReadRegisterReply: Waiting for server reply...");
+
+                // Set read timeout to prevent infinite blocking
+                stream.ReadTimeout = 5000; // 5 second timeout
+
+                byte[] buffer = new byte[1024];
+                int bytesRead = stream.Read(buffer, 0, buffer.Length);
+                
+                if (bytesRead > 0)
+                {
+                    Helper.Log.Write(Helper.eLogType.Info, $"ReadRegisterReply: Got {bytesRead} bytes");
+                    
+                    byte[] replyData = new byte[bytesRead];
+                    Array.Copy(buffer, replyData, bytesRead);
+
+                    Reply reply = ParseReply(replyData);
+                    
+                    if (reply.Registered > 0)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, "ReadRegisterReply: REGISTERED OK!");
+                    }
+                    else
+                    {
+                        Helper.Log.Write(Helper.eLogType.Error, $"ReadRegisterReply: NOT registered (code: {reply.Registered})");
+                    }
+                }
+                else
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, "ReadRegisterReply: No data received");
+                }
+            }
+            catch (System.IO.IOException ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"ReadRegisterReply TIMEOUT: {ex.Message}");
+                DisconnectClient();
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"ReadRegisterReply ERROR: {ex.Message}");
+                DisconnectClient();
             }
         }
 

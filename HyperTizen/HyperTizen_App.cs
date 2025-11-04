@@ -1,4 +1,4 @@
-﻿using Tizen.Applications;
+using Tizen.Applications;
 using Tizen.Applications.Notifications;
 using Tizen.System;
 using System.Threading.Tasks;
@@ -12,6 +12,10 @@ namespace HyperTizen
         {
             base.OnCreate();
             if (!Preference.Contains("enabled")) Preference.Set("enabled", "false");
+            
+            // Run diagnostics to check which capture APIs are available
+            DiagnosticCapture.RunDiagnostics();
+            
             Display.StateChanged += Display_StateChanged;
             client = new HyperionClient();
         }

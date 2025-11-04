@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace HyperTizen.WebSocket.DataTypes
 {
@@ -8,7 +8,10 @@ namespace HyperTizen.WebSocket.DataTypes
         ReadConfig,
         ReadConfigResult,
         ScanSSDP,
-        SSDPScanResult
+        SSDPScanResult,
+        GetLogs,
+        LogsResult,
+        StatusUpdate
     }
 
     public class BasicEvent
@@ -61,6 +64,30 @@ namespace HyperTizen.WebSocket.DataTypes
                 UrlBase = urlBase;
             }
         }
+    }
+
+    public class LogsResultEvent : BasicEvent
+    {
+        public LogsResultEvent(List<string> logs, string logPath)
+        {
+            this.logs = logs;
+            this.logPath = logPath;
+            this.Event = Event.LogsResult;
+        }
+        public List<string> logs { get; set; }
+        public string logPath { get; set; }
+    }
+
+    public class StatusUpdateEvent : BasicEvent
+    {
+        public StatusUpdateEvent(string status, string message)
+        {
+            this.status = status;
+            this.message = message;
+            this.Event = Event.StatusUpdate;
+        }
+        public string status { get; set; }
+        public string message { get; set; }
     }
 
     public class ImageCommand

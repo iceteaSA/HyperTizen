@@ -18,36 +18,71 @@ namespace HyperTizen.Helper
     }
     public static class Log
     {
-        public static void Write(eLogType type,string message)
+        // Store last 50 log messages for WebSocket/UI access
+        private static readonly Queue<string> recentLogs = new Queue<string>(50);
+        private static readonly object logLock = new object();
+        
+        public static List<string> GetRecentLogs()
         {
-            switch (type)
+            lock (logLock)
             {
-                case eLogType.Debug:
-                    Debug.WriteLine(message);
-                    break;
-                case eLogType.Info:
-                    //Debug.WriteLine(message);
-                    break;
-                case eLogType.Warning:
-                    Debug.WriteLine(message);
-                    break;
-                case eLogType.Error:
-                    Debug.WriteLine(message);
-                    {
-                        Notification notification = new Notification
-                        {
-                            Title = "HyperTizen Error!",
-                            Content = message,
-                            Count = 1
-                        };
-                        NotificationManager.Post(notification);
-                    }
-                    break;
-                case eLogType.Performance:
-                    //Debug.WriteLine(message);
-                    break;
+                return new List<string>(recentLogs);
             }
-
+        }
+        
+        public static string GetWorkingLogPath()
+        {
+            return "Logs via WebSocket only";
+        }
+        
+        public static void Write(eLogType type, string message)
+        {
+            string timestamp = DateTime.Now.ToString("HH:mm:ss");
+            string logMessage = $"[{timestamp}] [{type}] {message}";
+            
+            // Store in recent logs for WebSocket access
+            lock (logLock)
+            {
+                if (recentLogs.Count >= 50)
+                    recentLogs.Dequeue();
+                recentLogs.Enqueue(logMessage);
+            }
+            
+            // Always write to Debug output
+            Debug.WriteLine(logMessage);
+            
+            // Show notification for important messages (works on TV!)
+            if (type == eLogType.Error || type == eLogType.Warning || type == eLogType.Info)
+            {
+                try
+                {
+//                     string toastMessage = message.Length > 60 ? message.Substring(0, 60) + "..." : message;
+//                     ShowToast(toastMessage);
+                    ShowToast(message);
+                }
+                catch
+                {
+                    // Silently fail
+                }
+            }
+        }
+        
+        private static void ShowToast(string message)
+        {
+            try
+            {
+                Notification notification = new Notification
+                {
+                    Title = "HyperTizen",
+                    Content = message,
+                    Count = 1
+                };
+                NotificationManager.Post(notification);
+            }
+            catch
+            {
+                // Silently fail
+            }
         }
     }
 }

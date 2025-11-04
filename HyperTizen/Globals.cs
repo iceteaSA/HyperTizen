@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -30,9 +30,25 @@ namespace HyperTizen
         }
         public void SetConfig()
         {
+            Helper.Log.Write(Helper.eLogType.Info, "SSDP: Starting discovery...");
+            
             (string ip, int port) = Helper.SsdpDiscovery.GetHyperIpAndPort();
-            ServerIp = ip; //ServerIp = "192.168.69.200";
-            ServerPort = port; //ServerPort = 19400;
+            
+            if (string.IsNullOrEmpty(ip) || port <= 0)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, 
+                    "SSDP FAILED: No HyperHDR found. Check network!");
+                // Set defaults or leave as null for validation later
+                ServerIp = null;
+                ServerPort = 0;
+            }
+            else
+            {
+                Helper.Log.Write(Helper.eLogType.Info, 
+                    $"SSDP OK: Found {ip}:{port}");
+                ServerIp = ip;
+                ServerPort = port;
+            }
 
             Enabled = true;//bool.Parse(Preference.Get<string>("enabled"));
             Width = 3840/8;
