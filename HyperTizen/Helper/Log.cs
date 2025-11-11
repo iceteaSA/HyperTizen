@@ -40,6 +40,20 @@ namespace HyperTizen.Helper
             webSocketServer = null;
         }
 
+        public static string GetWebSocketDiagnostics()
+        {
+            if (webSocketServer == null)
+            {
+                return "WebSocket: NOT STARTED";
+            }
+
+            bool running = webSocketServer.IsRunning();
+            int port = webSocketServer.GetPort();
+            int clients = webSocketServer.GetConnectedClientCount();
+
+            return $"WebSocket: {(running ? "RUNNING" : "STOPPED")} on port {port}, {clients} client(s) connected";
+        }
+
         public static List<string> GetRecentLogs()
         {
             lock (logLock)

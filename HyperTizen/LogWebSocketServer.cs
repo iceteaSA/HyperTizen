@@ -388,5 +388,15 @@ namespace HyperTizen
                 return clients.Count;
             }
         }
+
+        public bool IsRunning()
+        {
+            return isRunning;
+        }
+
+        public int GetPort()
+        {
+            return port;
+        }
     }
 }

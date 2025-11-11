@@ -152,8 +152,22 @@ namespace HyperTizen
                     // Wait for 10 minutes
                     for (int i = 10; i > 0; i--)
                     {
+                        // Get WebSocket diagnostics
+                        string wsDiag = Helper.Log.GetWebSocketDiagnostics();
+
                         Helper.Log.Write(Helper.eLogType.Info,
                             $"Diagnostic mode: {i} minute(s) remaining...");
+                        Helper.Log.Write(Helper.eLogType.Info, wsDiag);
+
+                        // Show notification with WebSocket status
+                        Notification countdownNotif = new Notification
+                        {
+                            Title = $"⏱ {i} min remaining",
+                            Content = wsDiag,
+                            Count = 100 + i
+                        };
+                        NotificationManager.Post(countdownNotif);
+
                         await Task.Delay(60000); // 1 minute
                     }
 
