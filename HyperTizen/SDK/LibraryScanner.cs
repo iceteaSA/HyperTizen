@@ -341,6 +341,98 @@ namespace HyperTizen.SDK
                     ProbeLibrary(lib);
                 }
             }
+
+            // TEST THE FOUND LIBRARIES!
+            Helper.Log.Write(Helper.eLogType.Info, "");
+            Helper.Log.Write(Helper.eLogType.Info, "--- Testing Found Capture Functions ---");
+            TestCapiVideoCapture();
+        }
+
+        // Test the libcapi-video-capture.so functions we found
+        [DllImport("/usr/lib/libcapi-video-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen_video_only")]
+        private static extern int CapiCaptureScreenVideo(int w, int h, ref SecVideoCapture.Info_t pInfo);
+
+        [DllImport("/usr/lib/libcapi-video-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen")]
+        private static extern int CapiCaptureScreen(int w, int h, ref SecVideoCapture.Info_t pInfo);
+
+        [DllImport("/usr/lib/libcapi-video-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen_unlock")]
+        private static extern int CapiCaptureScreenUnlock();
+
+        private static void TestCapiVideoCapture()
+        {
+            Helper.Log.Write(Helper.eLogType.Info, "Testing libcapi-video-capture.so.0.1.0...");
+
+            try
+            {
+                // Allocate test buffers
+                int bufferSize = 0x7e900; // 518,400 bytes
+                byte[] yBuffer = new byte[bufferSize];
+                byte[] uvBuffer = new byte[bufferSize];
+
+                fixed (byte* pY = yBuffer, pUV = uvBuffer)
+                {
+                    SecVideoCapture.Info_t testInfo = new SecVideoCapture.Info_t();
+                    testInfo.pImageY = (IntPtr)pY;
+                    testInfo.pImageUV = (IntPtr)pUV;
+                    testInfo.iGivenBufferSize1 = bufferSize;
+                    testInfo.iGivenBufferSize2 = bufferSize;
+
+                    // Test 1: secvideo_api_capture_screen_video_only (most reliable)
+                    Helper.Log.Write(Helper.eLogType.Info, "  Test 1: secvideo_api_capture_screen_video_only()");
+                    int result = CapiCaptureScreenVideo(1920, 1080, ref testInfo);
+
+                    if (result == 0)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, "  ✅✅✅ CAPI VIDEO CAPTURE WORKS! ✅✅✅");
+                        Helper.Log.Write(Helper.eLogType.Info, $"  Captured resolution: {testInfo.iWidth}x{testInfo.iHeight}");
+                        Helper.Log.Write(Helper.eLogType.Info, $"  Y buffer first 16 bytes: {BitConverter.ToString(yBuffer, 0, 16)}");
+                        Helper.Log.Write(Helper.eLogType.Info, "  ⭐⭐⭐ USE LIBCAPI-VIDEO-CAPTURE.SO! ⭐⭐⭐");
+                        return;
+                    }
+                    else if (result == -4)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "  Result: -4 (DRM protected content)");
+                        Helper.Log.Write(Helper.eLogType.Info, "  ⭐ CAPI API works - try on non-DRM content!");
+                        return;
+                    }
+                    else
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, $"  Result: {result}");
+                    }
+
+                    // Test 2: secvideo_api_capture_screen (with UI)
+                    Helper.Log.Write(Helper.eLogType.Info, "  Test 2: secvideo_api_capture_screen() [with UI]");
+                    result = CapiCaptureScreen(1920, 1080, ref testInfo);
+
+                    if (result == 0)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, "  ✅✅✅ CAPI CAPTURE SCREEN WORKS! ✅✅✅");
+                        Helper.Log.Write(Helper.eLogType.Info, $"  Captured resolution: {testInfo.iWidth}x{testInfo.iHeight}");
+                        Helper.Log.Write(Helper.eLogType.Info, "  ⭐⭐⭐ USE LIBCAPI-VIDEO-CAPTURE.SO! ⭐⭐⭐");
+                        return;
+                    }
+                    else if (result == -4)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "  Result: -4 (DRM protected content)");
+                        Helper.Log.Write(Helper.eLogType.Info, "  ⭐ CAPI API works!");
+                        return;
+                    }
+                    else
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, $"  Result: {result}");
+                    }
+
+                    Helper.Log.Write(Helper.eLogType.Error, "  ✗ CAPI functions also blocked/failed");
+                }
+            }
+            catch (DllNotFoundException)
+            {
+                Helper.Log.Write(Helper.eLogType.Debug, "  Library exists but cannot be loaded");
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"  Test failed: {ex.Message}");
+            }
         }
     }
 }
