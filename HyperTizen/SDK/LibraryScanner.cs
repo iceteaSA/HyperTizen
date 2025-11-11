@@ -57,6 +57,16 @@ namespace HyperTizen.SDK
                     Helper.Log.Write(Helper.eLogType.Error, $"Promising libraries test crashed: {ex.Message}");
                 }
 
+                // 3. ACTUALLY CALL Dali function to test if it works!
+                try
+                {
+                    CallDaliFunction();
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, $"Dali function call crashed: {ex.Message}");
+                }
+
                 // 4. Try framebuffer access
                 try
                 {
@@ -165,9 +175,9 @@ namespace HyperTizen.SDK
                             {
                                 Helper.Log.Write(Helper.eLogType.Debug, $"  Found: {file}");
 
-                                // Wrap ProbeLibrary in timeout (max 5 seconds per library)
+                                // Wrap ProbeLibrary in timeout (max 3 seconds per library - faster failure)
                                 var probeTask = System.Threading.Tasks.Task.Run(() => ProbeLibrary(file));
-                                if (!probeTask.Wait(5000))
+                                if (!probeTask.Wait(3000))
                                 {
                                     Helper.Log.Write(Helper.eLogType.Warning, $"  Timeout probing {file}");
                                 }
@@ -190,6 +200,26 @@ namespace HyperTizen.SDK
         {
             try
             {
+                // Blacklist of libraries known to cause crashes
+                string fileName = Path.GetFileName(libraryPath).ToLower();
+                string[] blacklist = new string[] {
+                    "libgfx-video-output",    // Causes undefined symbol crashes
+                    "libgfx-",                 // Graphics libs can be unstable
+                    "libwayland",              // Wayland graphics
+                    "libgl",                   // OpenGL
+                    "libegl",                  // EGL
+                    "libvulkan"                // Vulkan
+                };
+
+                foreach (string blacklisted in blacklist)
+                {
+                    if (fileName.Contains(blacklisted))
+                    {
+                        Helper.Log.Write(Helper.eLogType.Debug, $"    Skipping {Path.GetFileName(libraryPath)} (blacklisted)");
+                        return;
+                    }
+                }
+
                 // Try to load the library
                 IntPtr handle = dlopen(libraryPath, RTLD_LAZY);
                 if (handle == IntPtr.Zero)
@@ -510,6 +540,133 @@ namespace HyperTizen.SDK
                     {
                         try { dlclose(handle); } catch { }
                     }
+                }
+            }
+        }
+
+        // Delegate type for capture functions
+        // int secvideo_api_capture_screen_video_only(int width, int height, Info_t* pInfo)
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate int CaptureFuncDelegate(int w, int h, ref SecVideoCapture.Info_t pInfo);
+
+        /// <summary>
+        /// Actually call Dali library capture functions using safe marshalling
+        /// </summary>
+        private static void CallDaliFunction()
+        {
+            Helper.Log.Write(Helper.eLogType.Info, "--- Testing Dali Library Function Calls ---");
+
+            string libPath = "/usr/lib/libdali-extension-tv-video-canvas.so.0.1.0";
+
+            if (!File.Exists(libPath))
+            {
+                Helper.Log.Write(Helper.eLogType.Debug, "Dali library not found");
+                return;
+            }
+
+            IntPtr handle = IntPtr.Zero;
+            try
+            {
+                // Load library
+                handle = dlopen(libPath, RTLD_NOW);
+                if (handle == IntPtr.Zero)
+                {
+                    string error = dlerror();
+                    Helper.Log.Write(Helper.eLogType.Error, $"Cannot load Dali library: {error}");
+                    return;
+                }
+
+                Helper.Log.Write(Helper.eLogType.Info, "✓ Dali library loaded");
+
+                // Get function pointer
+                IntPtr funcPtr = dlsym(handle, "secvideo_api_capture_screen_video_only");
+                if (funcPtr == IntPtr.Zero)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, "Cannot find secvideo_api_capture_screen_video_only");
+                    return;
+                }
+
+                Helper.Log.Write(Helper.eLogType.Info, $"✓ Found function @ 0x{funcPtr.ToInt64():X}");
+
+                // Create delegate from function pointer
+                CaptureFuncDelegate captureFunc = Marshal.GetDelegateForFunctionPointer<CaptureFuncDelegate>(funcPtr);
+
+                // Allocate test buffers
+                int bufferSize = 0x7e900; // 518,400 bytes
+                byte[] yBuffer = new byte[bufferSize];
+                byte[] uvBuffer = new byte[bufferSize];
+
+                fixed (byte* pY = yBuffer, pUV = uvBuffer)
+                {
+                    SecVideoCapture.Info_t testInfo = new SecVideoCapture.Info_t();
+                    testInfo.pImageY = (IntPtr)pY;
+                    testInfo.pImageUV = (IntPtr)pUV;
+                    testInfo.iGivenBufferSize1 = bufferSize;
+                    testInfo.iGivenBufferSize2 = bufferSize;
+
+                    Helper.Log.Write(Helper.eLogType.Info, "Calling secvideo_api_capture_screen_video_only(1920, 1080, ...)");
+
+                    int result = captureFunc(1920, 1080, ref testInfo);
+
+                    Helper.Log.Write(Helper.eLogType.Info, $"Result: {result}");
+
+                    if (result == 0)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, "✅✅✅ DALI FUNCTION WORKS! ✅✅✅");
+                        Helper.Log.Write(Helper.eLogType.Info, $"Captured resolution: {testInfo.iWidth}x{testInfo.iHeight}");
+                        Helper.Log.Write(Helper.eLogType.Info, $"Y buffer first 16 bytes: {BitConverter.ToString(yBuffer, 0, 16)}");
+
+                        // Check if we got actual data
+                        bool hasData = false;
+                        for (int i = 0; i < 1000; i++)
+                        {
+                            if (yBuffer[i] != 0 || uvBuffer[i] != 0)
+                            {
+                                hasData = true;
+                                break;
+                            }
+                        }
+
+                        if (hasData)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Info, "✅ Buffers contain data - CAPTURE SUCCESSFUL!");
+                            Helper.Log.Write(Helper.eLogType.Info, "⭐⭐⭐ USE DALI LIBRARY FOR SCREEN CAPTURE! ⭐⭐⭐");
+                        }
+                        else
+                        {
+                            Helper.Log.Write(Helper.eLogType.Warning, "Buffers are empty - may need investigation");
+                        }
+                    }
+                    else if (result == -4)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "Result: -4 (DRM protected content)");
+                        Helper.Log.Write(Helper.eLogType.Info, "⭐ Dali function works but content is DRM protected");
+                        Helper.Log.Write(Helper.eLogType.Info, "Try on non-DRM content (e.g., HDMI input, apps, etc.)");
+                    }
+                    else if (result == -95)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Error, "Result: -95 (Operation not supported)");
+                        Helper.Log.Write(Helper.eLogType.Error, "Dali library also blocked by Samsung firmware");
+                    }
+                    else
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, $"Unexpected result code: {result}");
+                    }
+                }
+
+                dlclose(handle);
+                handle = IntPtr.Zero;
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"Error calling Dali function: {ex.Message}");
+                Helper.Log.Write(Helper.eLogType.Error, $"Stack trace: {ex.StackTrace}");
+            }
+            finally
+            {
+                if (handle != IntPtr.Zero)
+                {
+                    try { dlclose(handle); } catch { }
                 }
             }
         }
