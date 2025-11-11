@@ -141,7 +141,7 @@ namespace HyperTizen
                         "======================");
 
                     // TEST SCREEN CAPTURE (if Tizen 8+)
-                    if (SystemInfo.TizenVersionMajor >= 8)
+                    if (SDK.SystemInfo.TizenVersionMajor >= 8)
                     {
                         Helper.Log.Write(Helper.eLogType.Info, "");
                         Helper.Log.Write(Helper.eLogType.Info, "Running screen capture test...");
