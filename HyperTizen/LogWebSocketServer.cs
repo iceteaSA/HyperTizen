@@ -43,6 +43,10 @@ namespace HyperTizen
             try
             {
                 listener = new TcpListener(IPAddress.Any, port);
+
+                // Set socket options to allow address reuse
+                listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+
                 listener.Start();
                 isRunning = true;
 
