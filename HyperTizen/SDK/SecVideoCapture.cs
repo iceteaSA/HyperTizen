@@ -98,13 +98,20 @@ namespace HyperTizen.SDK
         [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "_Z11getInstancev")]
         private static extern IVideoCapture* GetInstanceImplSecMangled();
 
-        // Direct function imports from libvideo-capture-impl-sec.so (based on exports screenshot)
-        // These are alternatives to vtable access
+        // Direct function imports - try from multiple libraries
+        // Try 1: From libvideo-capture.so.0.1.0 (the library that successfully loads)
+        [DllImport("/usr/lib/libvideo-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getVideoMainYUV")]
+        private static extern int GetVideoMainYUVDirectMain(IVideoCapture* instance, ref InputParams input, byte* output);
+
+        [DllImport("/usr/lib/libvideo-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getVideoPostYUV")]
+        private static extern int GetVideoPostYUVDirectMain(IVideoCapture* instance, ref InputParams input, byte* output);
+
+        // Try 2: From libvideo-capture-impl-sec.so (if it exists)
         [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getVideoMainYUV")]
-        private static extern int GetVideoMainYUVDirect(IVideoCapture* instance, ref InputParams input, byte* output);
+        private static extern int GetVideoMainYUVDirectImpl(IVideoCapture* instance, ref InputParams input, byte* output);
 
         [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getVideoPostYUV")]
-        private static extern int GetVideoPostYUVDirect(IVideoCapture* instance, ref InputParams input, byte* output);
+        private static extern int GetVideoPostYUVDirectImpl(IVideoCapture* instance, ref InputParams input, byte* output);
 
         private static IVideoCapture* TryGetInstance()
         {
@@ -170,14 +177,34 @@ namespace HyperTizen.SDK
                 return;
             }
 
-            // Check if library file exists
+            // Discover available libraries
+            Helper.Log.Write(Helper.eLogType.Info, "=== T8 SDK Library Discovery ===");
+            string[] librariesToCheck = new string[] {
+                "/usr/lib/libvideo-capture.so",
+                "/usr/lib/libvideo-capture.so.0",
+                "/usr/lib/libvideo-capture.so.0.1",
+                "/usr/lib/libvideo-capture.so.0.1.0",
+                "/usr/lib/libvideo-capture-impl-sec.so",
+                "/usr/lib/libvideo-capture-impl-sec.so.0",
+                "/usr/lib/libvideo-capture-impl-sec.so.0.1",
+                "/usr/lib/libvideo-capture-impl-sec.so.0.1.0"
+            };
+
+            foreach (string lib in librariesToCheck)
+            {
+                bool exists = System.IO.File.Exists(lib);
+                Helper.Log.Write(Helper.eLogType.Info, $"  {lib}: {(exists ? "EXISTS" : "NOT FOUND")}");
+            }
+            Helper.Log.Write(Helper.eLogType.Info, "=== End Library Discovery ===");
+
+            // Check if main library file exists
             if (!System.IO.File.Exists("/usr/lib/libvideo-capture.so.0.1.0"))
             {
                 Helper.Log.Write(Helper.eLogType.Error, "T8 SDK: libvideo-capture.so.0.1.0 NOT FOUND!");
                 throw new System.IO.FileNotFoundException("Tizen 8 SDK library not found");
             }
 
-            Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Libraries found, trying multiple getInstance methods...");
+            Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Main library found, trying multiple getInstance methods...");
 
             // Wrap GetInstance in timeout protection
             IVideoCapture* tempInstance = null;
@@ -345,63 +372,91 @@ namespace HyperTizen.SDK
 
         private static int CaptureScreenDirect(int w, int h, ref Info_t pInfo)
         {
+            // Prepare input parameters (same as vtable method)
+            InputParams input = new InputParams();
+            byte[] outputBuffer = new byte[80]; // 0x50 bytes
+
+            // Initialize input structure based on decompiled code
+            input.field0 = 0;
+            input.field1 = 0;
+            input.field2 = 0xffff;
+            input.field3 = 0xffff;
+            input.field4 = 1;
+            input.field5 = 0;
+            input.field6 = 0;
+            input.field7 = 0;
+            input.field8 = 0;
+            input.field9 = 0;
+            input.bufferSize1 = pInfo.iGivenBufferSize1;  // 0x7e900 typically
+            input.bufferSize2 = pInfo.iGivenBufferSize2;  // 0x7e900 typically
+            input.pYBuffer = pInfo.pImageY;
+            input.pUVBuffer = pInfo.pImageUV;
+
+            // Try direct function from main library first
             try
             {
-                // Prepare input parameters (same as vtable method)
-                InputParams input = new InputParams();
-                byte[] outputBuffer = new byte[80]; // 0x50 bytes
-
-                // Initialize input structure based on decompiled code
-                input.field0 = 0;
-                input.field1 = 0;
-                input.field2 = 0xffff;
-                input.field3 = 0xffff;
-                input.field4 = 1;
-                input.field5 = 0;
-                input.field6 = 0;
-                input.field7 = 0;
-                input.field8 = 0;
-                input.field9 = 0;
-                input.bufferSize1 = pInfo.iGivenBufferSize1;  // 0x7e900 typically
-                input.bufferSize2 = pInfo.iGivenBufferSize2;  // 0x7e900 typically
-                input.pYBuffer = pInfo.pImageY;
-                input.pUVBuffer = pInfo.pImageUV;
-
-                // Call direct function
+                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Trying getVideoMainYUV from libvideo-capture.so.0.1.0...");
                 fixed (byte* pOutput = outputBuffer)
                 {
-                    int result = GetVideoMainYUVDirect(instance, ref input, pOutput);
+                    int result = GetVideoMainYUVDirectMain(instance, ref input, pOutput);
+                    Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Main library returned: {result}");
 
-                    Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Direct getVideoMainYUV returned: {result}");
-
-                    // Check result (0 or 4 are success, -4 is DRM)
                     if (result == 0 || result == 4)
                     {
-                        // Parse output - width and height should be at offsets 0 and 4
-                        int* pInts = (int*)pOutput;
-                        int outWidth = pInts[0];
-                        int outHeight = pInts[1];
-
-                        if (outWidth > 960 && outHeight > 540)
-                        {
-                            pInfo.iWidth = outWidth;
-                            pInfo.iHeight = outHeight;
-                            Helper.Log.Write(Helper.eLogType.Info, $"T8 SDK: Direct capture successful! Resolution: {outWidth}x{outHeight}");
-                        }
-                        else
-                        {
-                            Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: Direct capture dimensions invalid: {outWidth}x{outHeight}");
-                        }
+                        return ParseDirectCaptureResult(result, pOutput, ref pInfo, "main library");
                     }
-
-                    return result;
                 }
             }
             catch (Exception ex)
             {
-                Helper.Log.Write(Helper.eLogType.Error, $"T8 SDK: Exception in CaptureScreenDirect: {ex.Message}");
-                throw; // Re-throw to let caller handle
+                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Main library failed: {ex.Message}");
             }
+
+            // Try direct function from impl-sec library as fallback
+            try
+            {
+                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Trying getVideoMainYUV from libvideo-capture-impl-sec.so...");
+                fixed (byte* pOutput = outputBuffer)
+                {
+                    int result = GetVideoMainYUVDirectImpl(instance, ref input, pOutput);
+                    Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Impl-sec library returned: {result}");
+
+                    if (result == 0 || result == 4)
+                    {
+                        return ParseDirectCaptureResult(result, pOutput, ref pInfo, "impl-sec library");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Impl-sec library failed: {ex.Message}");
+                throw; // Re-throw to let caller try vtable method
+            }
+
+            // If we got here, both failed
+            Helper.Log.Write(Helper.eLogType.Warning, "T8 SDK: All direct function attempts failed");
+            return -99;
+        }
+
+        private static int ParseDirectCaptureResult(int result, byte* pOutput, ref Info_t pInfo, string source)
+        {
+            // Parse output - width and height should be at offsets 0 and 4
+            int* pInts = (int*)pOutput;
+            int outWidth = pInts[0];
+            int outHeight = pInts[1];
+
+            if (outWidth > 960 && outHeight > 540)
+            {
+                pInfo.iWidth = outWidth;
+                pInfo.iHeight = outHeight;
+                Helper.Log.Write(Helper.eLogType.Info, $"T8 SDK: Direct capture from {source} successful! Resolution: {outWidth}x{outHeight}");
+            }
+            else
+            {
+                Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: Direct capture from {source} dimensions invalid: {outWidth}x{outHeight}");
+            }
+
+            return result;
         }
 
         public static void EnableNewApi()
