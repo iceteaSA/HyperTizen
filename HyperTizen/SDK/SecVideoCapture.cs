@@ -88,7 +88,7 @@ namespace HyperTizen.SDK
         private static bool isInitialized = false;
         private static bool useNewApi = true; // Try new API first
 
-        // Try multiple library paths and function names
+        // getInstance - try from both libraries
         [DllImport("/usr/lib/libvideo-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "_Z11getInstancev")]
         private static extern IVideoCapture* GetInstanceMangled();
 
@@ -97,6 +97,14 @@ namespace HyperTizen.SDK
 
         [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "_Z11getInstancev")]
         private static extern IVideoCapture* GetInstanceImplSecMangled();
+
+        // Direct function imports from libvideo-capture-impl-sec.so (based on exports screenshot)
+        // These are alternatives to vtable access
+        [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getVideoMainYUV")]
+        private static extern int GetVideoMainYUVDirect(IVideoCapture* instance, ref InputParams input, byte* output);
+
+        [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getVideoPostYUV")]
+        private static extern int GetVideoPostYUVDirect(IVideoCapture* instance, ref InputParams input, byte* output);
 
         private static IVideoCapture* TryGetInstance()
         {
@@ -291,22 +299,39 @@ namespace HyperTizen.SDK
                 return -99;
             }
 
-            // Try new API first (getVideoMainYUV with lock/unlock)
+            // Try 1: Direct function call (based on exports)
+            try
+            {
+                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Trying direct function call to getVideoMainYUV...");
+                int result = CaptureScreenDirect(w, h, ref pInfo);
+                if (result == 0 || result == 4)
+                {
+                    Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Direct function call succeeded!");
+                    return result;
+                }
+                Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: Direct function call returned {result}, trying vtable...");
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: Direct function call failed: {ex.Message}, trying vtable...");
+            }
+
+            // Try 2: VTable API (getVideoMainYUV with lock/unlock)
             if (useNewApi && getVideoMainYUV != null && lockFunc != null && unlockFunc != null)
             {
                 int result = CaptureScreenNewApi(w, h, ref pInfo);
 
-                // If new API fails, try to fall back to old API
+                // If vtable API fails, try to fall back to old API
                 if (result != 0 && captureScreen != null)
                 {
-                    Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: New API failed with code {result}, trying old API...");
+                    Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: VTable API failed with code {result}, trying old API...");
                     useNewApi = false;
                     return captureScreen((IntPtr)instance, w, h, ref pInfo);
                 }
 
                 return result;
             }
-            // Fall back to old API if available
+            // Try 3: Fall back to old API if available
             else if (captureScreen != null)
             {
                 return captureScreen((IntPtr)instance, w, h, ref pInfo);
@@ -315,6 +340,67 @@ namespace HyperTizen.SDK
             {
                 Helper.Log.Write(Helper.eLogType.Error, "T8 SDK: No capture methods available");
                 return -99;
+            }
+        }
+
+        private static int CaptureScreenDirect(int w, int h, ref Info_t pInfo)
+        {
+            try
+            {
+                // Prepare input parameters (same as vtable method)
+                InputParams input = new InputParams();
+                byte[] outputBuffer = new byte[80]; // 0x50 bytes
+
+                // Initialize input structure based on decompiled code
+                input.field0 = 0;
+                input.field1 = 0;
+                input.field2 = 0xffff;
+                input.field3 = 0xffff;
+                input.field4 = 1;
+                input.field5 = 0;
+                input.field6 = 0;
+                input.field7 = 0;
+                input.field8 = 0;
+                input.field9 = 0;
+                input.bufferSize1 = pInfo.iGivenBufferSize1;  // 0x7e900 typically
+                input.bufferSize2 = pInfo.iGivenBufferSize2;  // 0x7e900 typically
+                input.pYBuffer = pInfo.pImageY;
+                input.pUVBuffer = pInfo.pImageUV;
+
+                // Call direct function
+                fixed (byte* pOutput = outputBuffer)
+                {
+                    int result = GetVideoMainYUVDirect(instance, ref input, pOutput);
+
+                    Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Direct getVideoMainYUV returned: {result}");
+
+                    // Check result (0 or 4 are success, -4 is DRM)
+                    if (result == 0 || result == 4)
+                    {
+                        // Parse output - width and height should be at offsets 0 and 4
+                        int* pInts = (int*)pOutput;
+                        int outWidth = pInts[0];
+                        int outHeight = pInts[1];
+
+                        if (outWidth > 960 && outHeight > 540)
+                        {
+                            pInfo.iWidth = outWidth;
+                            pInfo.iHeight = outHeight;
+                            Helper.Log.Write(Helper.eLogType.Info, $"T8 SDK: Direct capture successful! Resolution: {outWidth}x{outHeight}");
+                        }
+                        else
+                        {
+                            Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: Direct capture dimensions invalid: {outWidth}x{outHeight}");
+                        }
+                    }
+
+                    return result;
+                }
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"T8 SDK: Exception in CaptureScreenDirect: {ex.Message}");
+                throw; // Re-throw to let caller handle
             }
         }
 
