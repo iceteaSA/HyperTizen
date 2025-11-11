@@ -57,7 +57,17 @@ namespace HyperTizen.SDK
                     Helper.Log.Write(Helper.eLogType.Error, $"Promising libraries test crashed: {ex.Message}");
                 }
 
-                // 3. ACTUALLY CALL Dali function to test if it works!
+                // 3. TEST VideoEnhance pixel sampling (THE WORKING METHOD!)
+                try
+                {
+                    VideoEnhanceCapture.TestCapture();
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, $"VideoEnhance test crashed: {ex.Message}");
+                }
+
+                // 4. ACTUALLY CALL Dali function to test if it works (will fail with -95)
                 try
                 {
                     CallDaliFunction();
@@ -67,7 +77,7 @@ namespace HyperTizen.SDK
                     Helper.Log.Write(Helper.eLogType.Error, $"Dali function call crashed: {ex.Message}");
                 }
 
-                // 4. Try framebuffer access
+                // 5. Try framebuffer access
                 try
                 {
                     TryFrameBuffer();
@@ -208,7 +218,8 @@ namespace HyperTizen.SDK
                     "libwayland",              // Wayland graphics
                     "libgl",                   // OpenGL
                     "libegl",                  // EGL
-                    "libvulkan"                // Vulkan
+                    "libvulkan",               // Vulkan
+                    "libscreen_connector"      // Screen connector causes crashes (undefined symbols)
                 };
 
                 foreach (string blacklisted in blacklist)
