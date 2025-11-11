@@ -195,42 +195,84 @@ namespace HyperTizen.SDK
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate IVideoCapture* GetInstanceDelegate();
 
+        private static string searchLogPath = "/tmp/hypertizen_search.log";
+
         private static void SearchForLibraries()
         {
-            Helper.Log.Write(Helper.eLogType.Info, "=== Comprehensive Library Search (refined for stability) ===");
+            // Write to file instead of memory to avoid crashes
+            try
+            {
+                System.IO.File.WriteAllText(searchLogPath, "=== EXHAUSTIVE Library Search - Starting ===\n");
+                System.IO.File.AppendAllText(searchLogPath, $"Started at: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n\n");
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"Failed to create search log file: {ex.Message}");
+                return;
+            }
 
-            // Lighter, faster search commands - avoid heavy find operations
+            Helper.Log.Write(Helper.eLogType.Info, $"Search results being written to: {searchLogPath}");
+            Helper.Log.Write(Helper.eLogType.Info, "Connect to WebSocket to view full results");
+
+            // EXHAUSTIVE search - write directly to file
             string[] searchCommands = new string[] {
-                // Direct ls checks (fast, no traversal)
-                "ls -lh /usr/lib/libvideo-capture* 2>/dev/null | head -10",
-                "ls -lh /usr/lib/libcapi*video*capture* 2>/dev/null | head -10",
-                "ls -lh /usr/lib/*capture*.so* 2>/dev/null | head -20",
+                // === Direct ls checks ===
+                "ls -lh /usr/lib/libvideo-capture* 2>/dev/null",
+                "ls -lh /usr/lib/libcapi*video*capture* 2>/dev/null",
+                "ls -lh /usr/lib/*capture*.so* 2>/dev/null",
+                "ls -lh /usr/lib/*video*.so* 2>/dev/null",
 
-                // Check if lib64 exists before searching
-                "test -d /usr/lib64 && ls -lh /usr/lib64/*video*capture* 2>/dev/null | head -5 || echo 'lib64 not present'",
+                // === Find searches with maxdepth ===
+                "find /usr/lib -maxdepth 3 -name '*video*' -o -name '*capture*' 2>/dev/null",
+                "find /opt -maxdepth 4 -name '*video*capture*' 2>/dev/null",
+                "find /lib -maxdepth 2 -name '*video*' -o -name '*capture*' 2>/dev/null",
 
-                // Check specific vendor paths (only if they exist)
-                "test -d /vendor/lib && ls -lh /vendor/lib/*video*capture* 2>/dev/null | head -5 || echo 'vendor/lib not present'",
-                "test -d /system/lib && ls -lh /system/lib/*video*capture* 2>/dev/null | head -5 || echo 'system/lib not present'",
+                // === Check vendor/system paths ===
+                "test -d /usr/lib64 && find /usr/lib64 -maxdepth 2 -name '*video*' 2>/dev/null || echo '/usr/lib64 not present'",
+                "test -d /vendor && find /vendor -maxdepth 3 -name '*video*capture*' 2>/dev/null || echo '/vendor not present'",
+                "test -d /system && find /system -maxdepth 3 -name '*video*capture*' 2>/dev/null || echo '/system not present'",
+                "test -d /usr/vendor && find /usr/vendor -maxdepth 3 -name '*video*capture*' 2>/dev/null || echo '/usr/vendor not present'",
 
-                // Opt library (common on Tizen)
-                "ls -lh /opt/usr/lib/*video*capture* 2>/dev/null | head -10",
+                // === System information ===
+                "ldconfig -p 2>/dev/null | grep -i video",
+                "ldconfig -p 2>/dev/null | grep -i capture",
+                "cat /proc/self/maps 2>/dev/null | grep -i video",
+                "cat /proc/self/maps 2>/dev/null | grep '\\.so'",
 
-                // System checks (fast)
-                "ldconfig -p 2>/dev/null | grep -i video | grep -i capture | head -5",
-                "cat /proc/self/maps 2>/dev/null | grep -i 'video.*\\.so' | head -5",
+                // === Library dependencies and symbols ===
+                "ldd /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null",
+                "readelf -d /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null | grep NEEDED",
+                "nm -D /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null | grep -i instance | head -20",
+                "nm -D /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null | grep -i video | head -20",
+                "nm -D /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null | grep -i capture | head -20",
 
-                // Library dependencies
-                "ldd /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null | head -10"
+                // === Package information ===
+                "rpm -qf /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null || echo 'rpm not available'",
+                "dpkg -S /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null || echo 'dpkg not available'",
+
+                // === File type and strings ===
+                "file /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null",
+                "strings /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null | grep -i 'getInstance' | head -10",
+                "strings /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null | grep -i 'VideoCapture' | head -15"
             };
 
             int searchNum = 0;
+            int totalSearches = searchCommands.Length;
+
             foreach (string cmd in searchCommands)
             {
                 searchNum++;
                 try
                 {
-                    Helper.Log.Write(Helper.eLogType.Info, $"  [{searchNum}/{searchCommands.Length}] Running: {cmd.Substring(0, Math.Min(50, cmd.Length))}...");
+                    // Log progress to console (short message)
+                    if (searchNum % 5 == 0)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, $"Search progress: {searchNum}/{totalSearches}");
+                    }
+
+                    // Write to file
+                    System.IO.File.AppendAllText(searchLogPath, $"\n[{searchNum}/{totalSearches}] Command: {cmd}\n");
+                    System.IO.File.AppendAllText(searchLogPath, new string('-', 80) + "\n");
 
                     var process = new System.Diagnostics.Process();
                     process.StartInfo.FileName = "/bin/sh";
@@ -240,43 +282,46 @@ namespace HyperTizen.SDK
                     process.StartInfo.UseShellExecute = false;
                     process.Start();
 
-                    // 1.5 second timeout per command (reduced from 2s)
-                    if (process.WaitForExit(1500))
+                    // 3 second timeout
+                    if (process.WaitForExit(3000))
                     {
                         string output = process.StandardOutput.ReadToEnd();
                         if (!string.IsNullOrWhiteSpace(output))
                         {
-                            int lineCount = 0;
-                            foreach (string line in output.Split('\n'))
-                            {
-                                if (!string.IsNullOrWhiteSpace(line) && lineCount < 15)
-                                {
-                                    Helper.Log.Write(Helper.eLogType.Info, $"    {line.Trim()}");
-                                    lineCount++;
-                                }
-                            }
+                            System.IO.File.AppendAllText(searchLogPath, output + "\n");
                         }
                         else
                         {
-                            Helper.Log.Write(Helper.eLogType.Debug, "    (no results)");
+                            System.IO.File.AppendAllText(searchLogPath, "(no output)\n");
                         }
                     }
                     else
                     {
                         try { process.Kill(); } catch { }
-                        Helper.Log.Write(Helper.eLogType.Debug, "    (timed out)");
+                        System.IO.File.AppendAllText(searchLogPath, "(timed out after 3s)\n");
                     }
 
-                    // Sleep 300ms between searches for stability
-                    System.Threading.Thread.Sleep(300);
+                    // 500ms delay
+                    System.Threading.Thread.Sleep(500);
+
+                    // Notify WebSocket clients of progress
+                    if (searchNum % 3 == 0)
+                    {
+                        Helper.Log.BroadcastSearchProgress(searchNum, totalSearches, searchLogPath);
+                    }
                 }
                 catch (Exception ex)
                 {
-                    Helper.Log.Write(Helper.eLogType.Debug, $"    Search failed: {ex.Message}");
+                    System.IO.File.AppendAllText(searchLogPath, $"FAILED: {ex.Message}\n");
                 }
             }
 
-            Helper.Log.Write(Helper.eLogType.Info, "=== End Comprehensive Search ===");
+            System.IO.File.AppendAllText(searchLogPath, $"\n=== End Exhaustive Search ===\n");
+            System.IO.File.AppendAllText(searchLogPath, $"Completed: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n");
+            System.IO.File.AppendAllText(searchLogPath, $"Total searches: {searchNum}\n");
+
+            Helper.Log.Write(Helper.eLogType.Info, $"Search complete! Results in: {searchLogPath}");
+            Helper.Log.BroadcastSearchComplete(searchLogPath);
         }
 
         private static IVideoCapture* TryGetInstance()
