@@ -162,6 +162,17 @@ namespace HyperTizen
                             Helper.Log.Write(Helper.eLogType.Error, $"Screen capture test exception: {testEx.Message}");
                         }
                         Helper.Log.Write(Helper.eLogType.Info, "");
+
+                        // SCAN FOR ALTERNATIVES - Look for workarounds and alternative libraries
+                        Helper.Log.Write(Helper.eLogType.Info, "Scanning for alternative capture methods...");
+                        try
+                        {
+                            SDK.LibraryScanner.ScanForAlternatives();
+                        }
+                        catch (Exception scanEx)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Error, $"Library scan exception: {scanEx.Message}");
+                        }
                     }
 
                     // Show notification
