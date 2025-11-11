@@ -818,12 +818,16 @@ namespace HyperTizen.SDK
             try
             {
                 // Step 1: Call lock function (vtable[13])
+                // Note: Reference code (GetCaptureFromTZ.c:57) does NOT check Lock return value
                 Helper.Log.Write(Helper.eLogType.Debug, "T8 SDK: Calling lock function...");
                 int lockResult = lockFunc((IntPtr)instance, 1, 0);
                 if (lockResult != 0)
                 {
-                    Helper.Log.Write(Helper.eLogType.Error, $"T8 SDK: Lock failed with code {lockResult}");
-                    return lockResult;
+                    Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: Lock returned code {lockResult} (continuing anyway, reference code doesn't check this)");
+                }
+                else
+                {
+                    Helper.Log.Write(Helper.eLogType.Debug, "T8 SDK: Lock returned 0 (success)");
                 }
 
                 // Step 2: Prepare input and output parameters
