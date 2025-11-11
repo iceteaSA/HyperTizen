@@ -263,9 +263,10 @@
         </label>
         <label>
             Port:
-            <input type="number" id="port" value="8765" style="width: 80px;">
+            <input type="number" id="port" value="45678" style="width: 80px;">
         </label>
         <button onclick="connect()">Connect</button>
+        <button onclick="stopReconnect()" class="clear">Stop Auto-Reconnect</button>
     </div>
 
     <div class="logs-container" id="logsContainer"></div>
@@ -292,7 +293,8 @@
 
         // Load saved settings
         const savedIp = localStorage.getItem('tvIp');
-        const savedPort = localStorage.getItem('port') || '8765';
+        const savedPort = localStorage.getItem('port') || '45678';
+        let autoReconnectEnabled = true;
 
         if (savedIp) {
             document.getElementById('tvIp').value = savedIp;
@@ -336,6 +338,9 @@
                 reconnectTimer = null;
             }
 
+            // Re-enable auto-reconnect when manually connecting
+            autoReconnectEnabled = true;
+
             updateStatus('connecting', 'Connecting...');
             addLog('[System]', 'Info', `Connecting to ${url}...`);
 
@@ -377,6 +382,10 @@
 
         function scheduleReconnect() {
             if (reconnectTimer) return; // Already scheduled
+            if (!autoReconnectEnabled) {
+                addLog('[System]', 'Info', 'Auto-reconnect disabled. Click "Connect" to reconnect manually.');
+                return;
+            }
 
             reconnectAttempts++;
             updateRetryCount();
@@ -397,7 +406,24 @@
 
         function reconnect() {
             reconnectAttempts = 0;
+            autoReconnectEnabled = true;
             connect();
+        }
+
+        function stopReconnect() {
+            autoReconnectEnabled = false;
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = null;
+            }
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            reconnectAttempts = 0;
+            updateRetryCount();
+            updateStatus('disconnected', 'Disconnected (manual)');
+            addLog('[System]', 'Info', 'Auto-reconnect stopped. Connection closed.');
         }
 
         function parseAndAddLog(message) {
@@ -476,8 +502,8 @@
                     reconnectTimer = null;
                 }
             } else {
-                // Page visible again - reconnect if disconnected
-                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                // Page visible again - reconnect if disconnected and auto-reconnect enabled
+                if (autoReconnectEnabled && (!ws || ws.readyState !== WebSocket.OPEN)) {
                     connect();
                 }
             }
