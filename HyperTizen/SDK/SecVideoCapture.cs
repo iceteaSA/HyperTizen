@@ -197,18 +197,41 @@ namespace HyperTizen.SDK
 
         private static void SearchForLibraries()
         {
-            Helper.Log.Write(Helper.eLogType.Info, "=== Quick Library Search ===");
+            Helper.Log.Write(Helper.eLogType.Info, "=== Comprehensive Library Search (with delays to prevent crashes) ===");
 
-            // Keep it simple - only check the most likely locations
-            string[] quickSearches = new string[] {
-                "ls -lh /usr/lib/*video*capture*.so* 2>/dev/null | head -10",
-                "ls -lh /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null"
+            // Comprehensive search with delays between operations
+            string[] searchCommands = new string[] {
+                // Standard library paths
+                "find /usr/lib -maxdepth 2 -name '*video*capture*' 2>/dev/null | head -20",
+                "find /usr/lib64 -maxdepth 2 -name '*video*capture*' 2>/dev/null | head -10",
+                "find /opt/usr/lib -maxdepth 2 -name '*video*capture*' 2>/dev/null | head -10",
+                "find /lib -maxdepth 2 -name '*video*capture*' 2>/dev/null | head -10",
+
+                // Vendor/system paths
+                "find /usr/vendor -maxdepth 3 -name '*video*capture*' 2>/dev/null | head -10",
+                "find /vendor -maxdepth 3 -name '*video*capture*' 2>/dev/null | head -10",
+                "find /system/lib -maxdepth 2 -name '*video*capture*' 2>/dev/null | head -10",
+
+                // Opt tree
+                "find /opt -maxdepth 3 -name '*video*capture*' 2>/dev/null | head -10",
+
+                // Linker cache
+                "ldconfig -p 2>/dev/null | grep -i video | grep -i capture | head -10",
+
+                // Additional checks
+                "ls -lh /usr/lib/*video*.so* 2>/dev/null | head -20",
+                "cat /proc/self/maps 2>/dev/null | grep -i video | head -10",
+                "ldd /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null | head -20"
             };
 
-            foreach (string cmd in quickSearches)
+            int searchNum = 0;
+            foreach (string cmd in searchCommands)
             {
+                searchNum++;
                 try
                 {
+                    Helper.Log.Write(Helper.eLogType.Info, $"  [{searchNum}/{searchCommands.Length}] Running: {cmd.Substring(0, Math.Min(60, cmd.Length))}...");
+
                     var process = new System.Diagnostics.Process();
                     process.StartInfo.FileName = "/bin/sh";
                     process.StartInfo.Arguments = $"-c \"{cmd}\"";
@@ -217,8 +240,8 @@ namespace HyperTizen.SDK
                     process.StartInfo.UseShellExecute = false;
                     process.Start();
 
-                    // Short timeout to prevent hanging
-                    if (process.WaitForExit(1000))
+                    // 2 second timeout per command
+                    if (process.WaitForExit(2000))
                     {
                         string output = process.StandardOutput.ReadToEnd();
                         if (!string.IsNullOrWhiteSpace(output))
@@ -227,24 +250,31 @@ namespace HyperTizen.SDK
                             {
                                 if (!string.IsNullOrWhiteSpace(line))
                                 {
-                                    Helper.Log.Write(Helper.eLogType.Info, $"  {line.Trim()}");
+                                    Helper.Log.Write(Helper.eLogType.Info, $"    {line.Trim()}");
                                 }
                             }
+                        }
+                        else
+                        {
+                            Helper.Log.Write(Helper.eLogType.Debug, "    (no results)");
                         }
                     }
                     else
                     {
-                        process.Kill();
-                        Helper.Log.Write(Helper.eLogType.Debug, "  Search timed out, skipping");
+                        try { process.Kill(); } catch { }
+                        Helper.Log.Write(Helper.eLogType.Debug, "    (timed out)");
                     }
+
+                    // Sleep 200ms between searches to prevent overwhelming the system
+                    System.Threading.Thread.Sleep(200);
                 }
                 catch (Exception ex)
                 {
-                    Helper.Log.Write(Helper.eLogType.Debug, $"  Search failed: {ex.Message}");
+                    Helper.Log.Write(Helper.eLogType.Debug, $"    Search failed: {ex.Message}");
                 }
             }
 
-            Helper.Log.Write(Helper.eLogType.Info, "=== End Quick Search ===");
+            Helper.Log.Write(Helper.eLogType.Info, "=== End Comprehensive Search ===");
         }
 
         private static IVideoCapture* TryGetInstance()
