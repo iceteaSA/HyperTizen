@@ -88,9 +88,71 @@ namespace HyperTizen.SDK
         private static bool isInitialized = false;
         private static bool useNewApi = true; // Try new API first
 
-        // Muss importiert sein, wenn getInstance exportiert wird
-        [DllImport("/usr/lib/libvideo-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getInstance")]
-        private static extern IVideoCapture* GetInstance();
+        // Try multiple library paths and function names
+        [DllImport("/usr/lib/libvideo-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "_Z11getInstancev")]
+        private static extern IVideoCapture* GetInstanceMangled();
+
+        [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getInstance")]
+        private static extern IVideoCapture* GetInstanceImplSec();
+
+        [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "_Z11getInstancev")]
+        private static extern IVideoCapture* GetInstanceImplSecMangled();
+
+        private static IVideoCapture* TryGetInstance()
+        {
+            IVideoCapture* inst = null;
+
+            // Try 1: Mangled name from libvideo-capture.so.0.1.0
+            try
+            {
+                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Trying _Z11getInstancev from libvideo-capture.so.0.1.0...");
+                inst = GetInstanceMangled();
+                if (inst != null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Success with mangled name!");
+                    return inst;
+                }
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Failed mangled name: {ex.Message}");
+            }
+
+            // Try 2: Plain name from libvideo-capture-impl-sec.so
+            try
+            {
+                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Trying getInstance from libvideo-capture-impl-sec.so...");
+                inst = GetInstanceImplSec();
+                if (inst != null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Success with impl-sec library!");
+                    return inst;
+                }
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Failed impl-sec: {ex.Message}");
+            }
+
+            // Try 3: Mangled name from libvideo-capture-impl-sec.so
+            try
+            {
+                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Trying _Z11getInstancev from libvideo-capture-impl-sec.so...");
+                inst = GetInstanceImplSecMangled();
+                if (inst != null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Success with impl-sec mangled name!");
+                    return inst;
+                }
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Failed impl-sec mangled: {ex.Message}");
+            }
+
+            Helper.Log.Write(Helper.eLogType.Error, "T8 SDK: All getInstance attempts failed!");
+            return null;
+        }
 
         public static void Init()
         {
@@ -107,20 +169,23 @@ namespace HyperTizen.SDK
                 throw new System.IO.FileNotFoundException("Tizen 8 SDK library not found");
             }
 
-            Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Library found, calling GetInstance()...");
-            
+            Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Libraries found, trying multiple getInstance methods...");
+
             // Wrap GetInstance in timeout protection
             IVideoCapture* tempInstance = null;
             bool getInstanceCompleted = false;
             Exception getInstanceError = null;
-            
+
             var getInstanceTask = System.Threading.Tasks.Task.Run(() =>
             {
                 try
                 {
-                    tempInstance = GetInstance();
+                    tempInstance = TryGetInstance();
                     getInstanceCompleted = true;
-                    Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: GetInstance() returned!");
+                    if (tempInstance != null)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: GetInstance() returned successfully!");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -128,25 +193,25 @@ namespace HyperTizen.SDK
                     Helper.Log.Write(Helper.eLogType.Error, $"T8 SDK: GetInstance() threw exception: {ex.Message}");
                 }
             });
-            
+
             // Wait max 5 seconds for GetInstance
             if (!getInstanceTask.Wait(5000))
             {
                 Helper.Log.Write(Helper.eLogType.Error, "T8 SDK: GetInstance() TIMEOUT after 5 seconds!");
                 throw new TimeoutException("GetInstance() hung - SDK incompatible with this TV model");
             }
-            
+
             if (getInstanceError != null)
             {
                 throw getInstanceError;
             }
-            
+
             if (!getInstanceCompleted)
             {
                 Helper.Log.Write(Helper.eLogType.Error, "T8 SDK: GetInstance() did not complete!");
                 throw new InvalidOperationException("GetInstance() failed silently");
             }
-            
+
             instance = tempInstance;
 
             if (instance == null)
