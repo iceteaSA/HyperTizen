@@ -102,50 +102,95 @@ namespace HyperTizen
 
         private void AcceptClientsLoop()
         {
+            Helper.Log.Write(Helper.eLogType.Debug, "WebSocket: Accept loop started");
+
             while (isRunning)
             {
                 try
                 {
-                    if (listener.Pending())
+                    // Use a short timeout to check isRunning periodically
+                    if (listener.Server.Poll(100000, SelectMode.SelectRead)) // 100ms in microseconds
                     {
+                        if (!isRunning) break;
+
                         var client = listener.AcceptTcpClient();
+                        Helper.Log.Write(Helper.eLogType.Debug, $"WebSocket: Accepted TCP connection");
+
                         Task.Run(() => HandleClient(client));
                     }
-                    Thread.Sleep(100);
+                }
+                catch (SocketException ex)
+                {
+                    if (isRunning)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Error, $"WebSocket accept socket error: {ex.ErrorCode} - {ex.Message}");
+                    }
                 }
                 catch (Exception ex)
                 {
                     if (isRunning)
                     {
-                        Helper.Log.Write(Helper.eLogType.Error, $"WebSocket accept error: {ex.Message}");
+                        Helper.Log.Write(Helper.eLogType.Error, $"WebSocket accept error: {ex.GetType().Name} - {ex.Message}");
                     }
                 }
             }
+
+            Helper.Log.Write(Helper.eLogType.Debug, "WebSocket: Accept loop stopped");
         }
 
         private async void HandleClient(TcpClient client)
         {
             NetworkStream stream = null;
             bool isWebSocket = false;
+            string clientEndpoint = "unknown";
 
             try
             {
+                clientEndpoint = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
+                Helper.Log.Write(Helper.eLogType.Debug, $"WebSocket: New connection from {clientEndpoint}");
+
                 stream = client.GetStream();
+                stream.ReadTimeout = 5000; // 5 second timeout for handshake
+                stream.WriteTimeout = 5000;
 
                 // Read HTTP handshake
                 byte[] buffer = new byte[4096];
                 int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+
+                if (bytesRead == 0)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, $"WebSocket: No data received from {clientEndpoint}");
+                    return;
+                }
+
                 string request = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                Helper.Log.Write(Helper.eLogType.Debug, $"WebSocket: Received {bytesRead} bytes from {clientEndpoint}");
 
                 if (request.StartsWith("GET"))
                 {
                     // WebSocket handshake
                     if (request.Contains("Upgrade: websocket"))
                     {
+                        Helper.Log.Write(Helper.eLogType.Debug, $"WebSocket: Handshake request from {clientEndpoint}");
+
                         string key = ExtractWebSocketKey(request);
+                        if (string.IsNullOrEmpty(key))
+                        {
+                            Helper.Log.Write(Helper.eLogType.Error, $"WebSocket: No Sec-WebSocket-Key from {clientEndpoint}");
+                            return;
+                        }
+
+                        Helper.Log.Write(Helper.eLogType.Debug, $"WebSocket: Key={key}");
+
                         string response = BuildWebSocketHandshakeResponse(key);
                         byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+
+                        Helper.Log.Write(Helper.eLogType.Debug, $"WebSocket: Sending handshake response ({responseBytes.Length} bytes)");
+
                         await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
+                        await stream.FlushAsync();
+
+                        Helper.Log.Write(Helper.eLogType.Info, $"WebSocket client connected from {clientEndpoint}");
 
                         isWebSocket = true;
                         lock (clientLock)
@@ -153,10 +198,10 @@ namespace HyperTizen
                             clients.Add(client);
                         }
 
-                        Helper.Log.Write(Helper.eLogType.Info, $"WebSocket client connected from {client.Client.RemoteEndPoint}");
-
                         // Send all recent logs to new client
                         var recentLogs = Helper.Log.GetRecentLogs();
+                        Helper.Log.Write(Helper.eLogType.Debug, $"WebSocket: Sending {recentLogs.Count} recent logs to {clientEndpoint}");
+
                         foreach (var log in recentLogs)
                         {
                             await SendWebSocketMessage(stream, log);
@@ -165,11 +210,23 @@ namespace HyperTizen
                         // Keep connection alive and wait for close
                         await WaitForClientClose(stream);
                     }
+                    else
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, $"WebSocket: No 'Upgrade: websocket' header from {clientEndpoint}");
+                    }
+                }
+                else
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, $"WebSocket: Not a GET request from {clientEndpoint}");
                 }
             }
             catch (Exception ex)
             {
-                Helper.Log.Write(Helper.eLogType.Debug, $"WebSocket client error: {ex.Message}");
+                Helper.Log.Write(Helper.eLogType.Error, $"WebSocket client error from {clientEndpoint}: {ex.GetType().Name} - {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, $"  Inner: {ex.InnerException.Message}");
+                }
             }
             finally
             {
