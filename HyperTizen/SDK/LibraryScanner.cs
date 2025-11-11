@@ -29,37 +29,98 @@ namespace HyperTizen.SDK
         /// </summary>
         public static void ScanForAlternatives()
         {
-            Helper.Log.Write(Helper.eLogType.Info, "");
-            Helper.Log.Write(Helper.eLogType.Info, "=== Scanning for Alternative Capture Methods ===");
+            try
+            {
+                Helper.Log.Write(Helper.eLogType.Info, "");
+                Helper.Log.Write(Helper.eLogType.Info, "=== Scanning for Alternative Capture Methods ===");
 
-            // DO ALL TESTS FIRST (before heavy library scanning)
-            // These are quick and won't crash
+                // DO ALL TESTS FIRST (before heavy library scanning)
+                // Each test wrapped in try-catch to ensure others continue if one crashes
 
-            // 1. Try T7 API (might still exist) - TEST FIRST!
-            TryT7API();
+                // 1. Try T7 API (might still exist) - TEST FIRST!
+                try
+                {
+                    TryT7API();
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, $"T7 API test crashed: {ex.Message}");
+                }
 
-            // 2. Test CAPI library directly (found by previous scan)
-            TestCapiVideoCapture();
+                // 2. Test CAPI library directly (found by previous scan)
+                try
+                {
+                    TestCapiVideoCapture();
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, $"CAPI test crashed: {ex.Message}");
+                }
 
-            // 3. Try framebuffer access
-            TryFrameBuffer();
+                // 3. Test Dali extension library (found by previous scan)
+                try
+                {
+                    TestDaliExtensionVideoCanvas();
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, $"Dali extension test crashed: {ex.Message}");
+                }
 
-            // 4. Check for debug/developer libraries (just checks existence)
-            CheckDeveloperLibraries();
+                // 4. Try framebuffer access
+                try
+                {
+                    TryFrameBuffer();
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, $"Framebuffer check crashed: {ex.Message}");
+                }
 
-            // THEN do heavy scanning (can be slow/crash)
-            Helper.Log.Write(Helper.eLogType.Info, "");
-            Helper.Log.Write(Helper.eLogType.Info, "--- Quick tests complete, starting library scan ---");
-            Helper.Log.Write(Helper.eLogType.Warning, "(This may take time and could disconnect WebSocket)");
+                // 5. Check for debug/developer libraries (just checks existence)
+                try
+                {
+                    CheckDeveloperLibraries();
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, $"Developer libs check crashed: {ex.Message}");
+                }
 
-            // 5. Search for all video/capture related libraries
-            SearchForLibraries();
+                // THEN do heavy scanning (can be slow/crash)
+                Helper.Log.Write(Helper.eLogType.Info, "");
+                Helper.Log.Write(Helper.eLogType.Info, "--- Quick tests complete, starting library scan ---");
+                Helper.Log.Write(Helper.eLogType.Warning, "(This may take time and could disconnect WebSocket)");
 
-            // 6. Try alternative Samsung libraries
-            TryAlternativeSamsungLibs();
+                // 6. Search for all video/capture related libraries
+                try
+                {
+                    SearchForLibraries();
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, $"Library search crashed: {ex.Message}");
+                }
 
-            Helper.Log.Write(Helper.eLogType.Info, "=== End Alternative Scan ===");
-            Helper.Log.Write(Helper.eLogType.Info, "");
+                // 7. Try alternative Samsung libraries
+                try
+                {
+                    TryAlternativeSamsungLibs();
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, $"Alternative Samsung libs check crashed: {ex.Message}");
+                }
+
+                Helper.Log.Write(Helper.eLogType.Info, "=== End Alternative Scan ===");
+                Helper.Log.Write(Helper.eLogType.Info, "");
+            }
+            catch (Exception topEx)
+            {
+                // Top-level catch for any escaped native exceptions
+                Helper.Log.Write(Helper.eLogType.Error, $"Alternative scan FATAL ERROR: {topEx.Message}");
+                Helper.Log.Write(Helper.eLogType.Error, $"Stack trace: {topEx.StackTrace}");
+            }
         }
 
         private static void SearchForLibraries()
@@ -91,11 +152,40 @@ namespace HyperTizen.SDK
                 {
                     foreach (string pattern in patterns)
                     {
-                        string[] files = Directory.GetFiles(path, pattern, SearchOption.TopDirectoryOnly);
-                        foreach (string file in files)
+                        try
                         {
-                            Helper.Log.Write(Helper.eLogType.Debug, $"  Found: {file}");
-                            ProbeLibrary(file);
+                            // Wrap Directory.GetFiles in timeout protection (max 10 seconds)
+                            string[] files = null;
+                            var searchTask = System.Threading.Tasks.Task.Run(() =>
+                            {
+                                return Directory.GetFiles(path, pattern, SearchOption.TopDirectoryOnly);
+                            });
+
+                            if (searchTask.Wait(10000)) // 10 second timeout
+                            {
+                                files = searchTask.Result;
+                            }
+                            else
+                            {
+                                Helper.Log.Write(Helper.eLogType.Warning, $"  Timeout searching {path} for {pattern}");
+                                continue;
+                            }
+
+                            foreach (string file in files)
+                            {
+                                Helper.Log.Write(Helper.eLogType.Debug, $"  Found: {file}");
+
+                                // Wrap ProbeLibrary in timeout (max 5 seconds per library)
+                                var probeTask = System.Threading.Tasks.Task.Run(() => ProbeLibrary(file));
+                                if (!probeTask.Wait(5000))
+                                {
+                                    Helper.Log.Write(Helper.eLogType.Warning, $"  Timeout probing {file}");
+                                }
+                            }
+                        }
+                        catch (Exception patternEx)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Debug, $"  Error with pattern {pattern} in {path}: {patternEx.Message}");
                         }
                     }
                 }
@@ -260,30 +350,29 @@ namespace HyperTizen.SDK
                 "/dev/graphics/fb1"
             };
 
-            foreach (string device in fbDevices)
+            try
             {
-                if (File.Exists(device))
+                foreach (string device in fbDevices)
                 {
-                    Helper.Log.Write(Helper.eLogType.Info, $"  ✓ Found: {device}");
-
-                    // Try to open it (read-only, non-blocking)
                     try
                     {
-                        using (FileStream fs = new FileStream(device, FileMode.Open, FileAccess.Read, FileShare.Read))
+                        if (File.Exists(device))
                         {
-                            Helper.Log.Write(Helper.eLogType.Info, $"  ⭐ CAN READ {device}! Size: {fs.Length} bytes");
-                            Helper.Log.Write(Helper.eLogType.Info, "  This might be usable for direct framebuffer capture!");
+                            Helper.Log.Write(Helper.eLogType.Info, $"  ✓ Found: {device}");
+                            // NOTE: Not attempting to open - can cause native crashes on Samsung TVs
+                            // FileStream on device files can block indefinitely or trigger kernel errors
+                            Helper.Log.Write(Helper.eLogType.Debug, $"  (Device exists but not testing read access - can cause crashes)");
                         }
-                    }
-                    catch (UnauthorizedAccessException)
-                    {
-                        Helper.Log.Write(Helper.eLogType.Debug, $"  ✗ {device} exists but no read permission (requires root)");
                     }
                     catch (Exception ex)
                     {
-                        Helper.Log.Write(Helper.eLogType.Debug, $"  ✗ {device} error: {ex.Message}");
+                        Helper.Log.Write(Helper.eLogType.Debug, $"  ✗ Error checking {device}: {ex.Message}");
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"Framebuffer check failed: {ex.Message}");
             }
         }
 
@@ -429,11 +518,97 @@ namespace HyperTizen.SDK
                     }
 
                     Helper.Log.Write(Helper.eLogType.Error, "  ✗ CAPI functions also blocked/failed");
+                    return;
                 }
             }
             catch (DllNotFoundException)
             {
                 Helper.Log.Write(Helper.eLogType.Debug, "  Library exists but cannot be loaded");
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"  Test failed: {ex.Message}");
+            }
+        }
+
+        // Test the libdali-extension-tv-video-canvas.so library (also has T7 functions)
+        [DllImport("/usr/lib/libdali-extension-tv-video-canvas.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen_video_only")]
+        private static extern int DaliCaptureScreenVideo(int w, int h, ref SecVideoCapture.Info_t pInfo);
+
+        [DllImport("/usr/lib/libdali-extension-tv-video-canvas.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen")]
+        private static extern int DaliCaptureScreen(int w, int h, ref SecVideoCapture.Info_t pInfo);
+
+        private static void TestDaliExtensionVideoCanvas()
+        {
+            Helper.Log.Write(Helper.eLogType.Info, "Testing libdali-extension-tv-video-canvas.so.0.1.0...");
+
+            try
+            {
+                // Allocate test buffers
+                int bufferSize = 0x7e900; // 518,400 bytes
+                byte[] yBuffer = new byte[bufferSize];
+                byte[] uvBuffer = new byte[bufferSize];
+
+                fixed (byte* pY = yBuffer, pUV = uvBuffer)
+                {
+                    SecVideoCapture.Info_t testInfo = new SecVideoCapture.Info_t();
+                    testInfo.pImageY = (IntPtr)pY;
+                    testInfo.pImageUV = (IntPtr)pUV;
+                    testInfo.iGivenBufferSize1 = bufferSize;
+                    testInfo.iGivenBufferSize2 = bufferSize;
+
+                    // Test 1: secvideo_api_capture_screen_video_only
+                    Helper.Log.Write(Helper.eLogType.Info, "  Test 1: secvideo_api_capture_screen_video_only()");
+                    int result = DaliCaptureScreenVideo(1920, 1080, ref testInfo);
+
+                    if (result == 0)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, "  ✅✅✅ DALI EXTENSION VIDEO CAPTURE WORKS! ✅✅✅");
+                        Helper.Log.Write(Helper.eLogType.Info, $"  Captured resolution: {testInfo.iWidth}x{testInfo.iHeight}");
+                        Helper.Log.Write(Helper.eLogType.Info, $"  Y buffer first 16 bytes: {BitConverter.ToString(yBuffer, 0, 16)}");
+                        Helper.Log.Write(Helper.eLogType.Info, "  ⭐⭐⭐ USE LIBDALI-EXTENSION-TV-VIDEO-CANVAS.SO! ⭐⭐⭐");
+                        return;
+                    }
+                    else if (result == -4)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "  Result: -4 (DRM protected content)");
+                        Helper.Log.Write(Helper.eLogType.Info, "  ⭐ DALI API works - try on non-DRM content!");
+                        return;
+                    }
+                    else
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, $"  Result: {result}");
+                    }
+
+                    // Test 2: secvideo_api_capture_screen (with UI)
+                    Helper.Log.Write(Helper.eLogType.Info, "  Test 2: secvideo_api_capture_screen() [with UI]");
+                    result = DaliCaptureScreen(1920, 1080, ref testInfo);
+
+                    if (result == 0)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, "  ✅✅✅ DALI CAPTURE SCREEN WORKS! ✅✅✅");
+                        Helper.Log.Write(Helper.eLogType.Info, $"  Captured resolution: {testInfo.iWidth}x{testInfo.iHeight}");
+                        Helper.Log.Write(Helper.eLogType.Info, "  ⭐⭐⭐ USE LIBDALI-EXTENSION-TV-VIDEO-CANVAS.SO! ⭐⭐⭐");
+                        return;
+                    }
+                    else if (result == -4)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "  Result: -4 (DRM protected content)");
+                        Helper.Log.Write(Helper.eLogType.Info, "  ⭐ DALI API works!");
+                        return;
+                    }
+                    else
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, $"  Result: {result}");
+                    }
+
+                    Helper.Log.Write(Helper.eLogType.Error, "  ✗ Dali extension functions also blocked/failed");
+                    return;
+                }
+            }
+            catch (DllNotFoundException)
+            {
+                Helper.Log.Write(Helper.eLogType.Debug, "  Library not found or cannot be loaded");
             }
             catch (Exception ex)
             {
