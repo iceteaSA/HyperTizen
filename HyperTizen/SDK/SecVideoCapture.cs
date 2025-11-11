@@ -79,17 +79,19 @@ namespace HyperTizen.SDK
         }
 
         // Vtable method delegates
-        [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
-        public unsafe delegate int LockDelegate(IntPtr @this, int param1, int param2);
+        // ARM uses Cdecl calling convention, not ThisCall
+        // The 'this' pointer is passed as the first parameter in r0
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public unsafe delegate int LockDelegate(IVideoCapture* @this, int param1, int param2);
 
-        [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
-        public unsafe delegate int GetVideoMainYUVDelegate(IntPtr @this, ref InputParams input, ref OutputParams output);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public unsafe delegate int GetVideoMainYUVDelegate(IVideoCapture* @this, InputParams* input, OutputParams* output);
 
-        [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
-        public unsafe delegate int UnlockDelegate(IntPtr @this, int param1, int param2);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public unsafe delegate int UnlockDelegate(IVideoCapture* @this, int param1, int param2);
 
-        [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
-        public unsafe delegate int CaptureScreenDelegate(IntPtr @this, int w, int h, ref Info_t pInfo);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public unsafe delegate int CaptureScreenDelegate(IVideoCapture* @this, int w, int h, ref Info_t pInfo);
 
         public unsafe struct IVideoCapture
         {
@@ -677,7 +679,7 @@ namespace HyperTizen.SDK
                 {
                     Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: VTable API failed with code {result}, trying old API...");
                     useNewApi = false;
-                    return captureScreen((IntPtr)instance, w, h, ref pInfo);
+                    return captureScreen(instance, w, h, ref pInfo);
                 }
 
                 return result;
@@ -685,7 +687,7 @@ namespace HyperTizen.SDK
             // Try 3: Fall back to old API if available
             else if (captureScreen != null)
             {
-                return captureScreen((IntPtr)instance, w, h, ref pInfo);
+                return captureScreen(instance, w, h, ref pInfo);
             }
             else
             {
@@ -820,7 +822,7 @@ namespace HyperTizen.SDK
                 // Step 1: Call lock function (vtable[13])
                 // Note: Reference code (GetCaptureFromTZ.c:57) does NOT check Lock return value
                 Helper.Log.Write(Helper.eLogType.Debug, "T8 SDK: Calling lock function...");
-                int lockResult = lockFunc((IntPtr)instance, 1, 0);
+                int lockResult = lockFunc(instance, 1, 0);
                 if (lockResult != 0)
                 {
                     Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: Lock returned code {lockResult} (continuing anyway, reference code doesn't check this)");
@@ -854,11 +856,11 @@ namespace HyperTizen.SDK
 
                 // Step 3: Call getVideoMainYUV (vtable[3])
                 Helper.Log.Write(Helper.eLogType.Debug, "T8 SDK: Calling getVideoMainYUV...");
-                int captureResult = getVideoMainYUV((IntPtr)instance, ref input, ref output);
+                int captureResult = getVideoMainYUV(instance, &input, &output);
 
                 // Step 4: Call unlock function (vtable[14])
                 Helper.Log.Write(Helper.eLogType.Debug, "T8 SDK: Calling unlock function...");
-                int unlockResult = unlockFunc((IntPtr)instance, 1, 0);
+                int unlockResult = unlockFunc(instance, 1, 0);
                 if (unlockResult != 0)
                 {
                     Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: Unlock returned code {unlockResult}");
