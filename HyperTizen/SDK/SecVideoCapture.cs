@@ -195,46 +195,88 @@ namespace HyperTizen.SDK
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate IVideoCapture* GetInstanceDelegate();
 
-        private static void LogKnownLibraryInfo()
+        private static void SearchForLibraries()
         {
-            Helper.Log.Write(Helper.eLogType.Info, "=== Known Library Information (from previous scans) ===");
-            Helper.Log.Write(Helper.eLogType.Info, "  Known to exist:");
-            Helper.Log.Write(Helper.eLogType.Info, "    /usr/lib/libvideo-capture.so.0");
-            Helper.Log.Write(Helper.eLogType.Info, "    /usr/lib/libvideo-capture.so.0.1.0");
-            Helper.Log.Write(Helper.eLogType.Info, "    /usr/lib/libcapi-video-capture.so*");
-            Helper.Log.Write(Helper.eLogType.Info, "  Known NOT to exist:");
-            Helper.Log.Write(Helper.eLogType.Info, "    /usr/lib/libvideo-capture-impl-sec.so (does not exist on Tizen 8+)");
-            Helper.Log.Write(Helper.eLogType.Info, "");
-            Helper.Log.Write(Helper.eLogType.Info, "  Quick verification using direct file checks:");
+            Helper.Log.Write(Helper.eLogType.Info, "=== Comprehensive Library Search (refined for stability) ===");
 
-            // Quick, safe verification using File.Exists (no shell commands)
-            string[] checkPaths = new string[] {
-                "/usr/lib/libvideo-capture.so.0.1.0",
-                "/usr/lib/libvideo-capture.so.0",
-                "/usr/lib/libcapi-video-capture.so.0.1.0"
+            // Lighter, faster search commands - avoid heavy find operations
+            string[] searchCommands = new string[] {
+                // Direct ls checks (fast, no traversal)
+                "ls -lh /usr/lib/libvideo-capture* 2>/dev/null | head -10",
+                "ls -lh /usr/lib/libcapi*video*capture* 2>/dev/null | head -10",
+                "ls -lh /usr/lib/*capture*.so* 2>/dev/null | head -20",
+
+                // Check if lib64 exists before searching
+                "test -d /usr/lib64 && ls -lh /usr/lib64/*video*capture* 2>/dev/null | head -5 || echo 'lib64 not present'",
+
+                // Check specific vendor paths (only if they exist)
+                "test -d /vendor/lib && ls -lh /vendor/lib/*video*capture* 2>/dev/null | head -5 || echo 'vendor/lib not present'",
+                "test -d /system/lib && ls -lh /system/lib/*video*capture* 2>/dev/null | head -5 || echo 'system/lib not present'",
+
+                // Opt library (common on Tizen)
+                "ls -lh /opt/usr/lib/*video*capture* 2>/dev/null | head -10",
+
+                // System checks (fast)
+                "ldconfig -p 2>/dev/null | grep -i video | grep -i capture | head -5",
+                "cat /proc/self/maps 2>/dev/null | grep -i 'video.*\\.so' | head -5",
+
+                // Library dependencies
+                "ldd /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null | head -10"
             };
 
-            foreach (string path in checkPaths)
+            int searchNum = 0;
+            foreach (string cmd in searchCommands)
             {
+                searchNum++;
                 try
                 {
-                    if (System.IO.File.Exists(path))
+                    Helper.Log.Write(Helper.eLogType.Info, $"  [{searchNum}/{searchCommands.Length}] Running: {cmd.Substring(0, Math.Min(50, cmd.Length))}...");
+
+                    var process = new System.Diagnostics.Process();
+                    process.StartInfo.FileName = "/bin/sh";
+                    process.StartInfo.Arguments = $"-c \"{cmd}\"";
+                    process.StartInfo.RedirectStandardOutput = true;
+                    process.StartInfo.RedirectStandardError = true;
+                    process.StartInfo.UseShellExecute = false;
+                    process.Start();
+
+                    // 1.5 second timeout per command (reduced from 2s)
+                    if (process.WaitForExit(1500))
                     {
-                        var fileInfo = new System.IO.FileInfo(path);
-                        Helper.Log.Write(Helper.eLogType.Info, $"    ✓ {path} ({fileInfo.Length} bytes)");
+                        string output = process.StandardOutput.ReadToEnd();
+                        if (!string.IsNullOrWhiteSpace(output))
+                        {
+                            int lineCount = 0;
+                            foreach (string line in output.Split('\n'))
+                            {
+                                if (!string.IsNullOrWhiteSpace(line) && lineCount < 15)
+                                {
+                                    Helper.Log.Write(Helper.eLogType.Info, $"    {line.Trim()}");
+                                    lineCount++;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Helper.Log.Write(Helper.eLogType.Debug, "    (no results)");
+                        }
                     }
                     else
                     {
-                        Helper.Log.Write(Helper.eLogType.Debug, $"    ✗ {path} (not found)");
+                        try { process.Kill(); } catch { }
+                        Helper.Log.Write(Helper.eLogType.Debug, "    (timed out)");
                     }
+
+                    // Sleep 300ms between searches for stability
+                    System.Threading.Thread.Sleep(300);
                 }
                 catch (Exception ex)
                 {
-                    Helper.Log.Write(Helper.eLogType.Debug, $"    ? {path} (error: {ex.Message})");
+                    Helper.Log.Write(Helper.eLogType.Debug, $"    Search failed: {ex.Message}");
                 }
             }
 
-            Helper.Log.Write(Helper.eLogType.Info, "=== End Known Library Information ===");
+            Helper.Log.Write(Helper.eLogType.Info, "=== End Comprehensive Search ===");
         }
 
         private static IVideoCapture* TryGetInstance()
@@ -287,17 +329,15 @@ namespace HyperTizen.SDK
                 return;
             }
 
-            // First: Log known library info (instant, no shell commands)
+            // First: Comprehensive library search with refined, lighter commands
             try
             {
-                LogKnownLibraryInfo();
+                SearchForLibraries();
             }
             catch (Exception ex)
             {
-                Helper.Log.Write(Helper.eLogType.Warning, $"Library info logging failed: {ex.Message}");
+                Helper.Log.Write(Helper.eLogType.Warning, $"Library search failed: {ex.Message}");
             }
-
-            // Skip the heavy library discovery section - already done above with LogKnownLibraryInfo()
 
             // Probe the main library (libvideo-capture.so.0.1.0) for exported functions
             try
