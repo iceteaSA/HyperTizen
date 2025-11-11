@@ -352,25 +352,21 @@ namespace HyperTizen.SDK
                 // Step 5: Parse output parameters
                 // The output structure should contain width/height at specific offsets
                 // Based on the decompiled code: local_54 and uStack_50 contain dimensions
-                fixed (byte* pOutput = output.data)
-                {
-                    // Try to extract width and height from output
-                    // This is speculative - may need adjustment based on actual output format
-                    int* pInts = (int*)pOutput;
-                    int outWidth = pInts[0];
-                    int outHeight = pInts[1];
+                // Note: output.data is already a fixed buffer, so we can access it directly
+                int* pInts = (int*)output.data;
+                int outWidth = pInts[0];
+                int outHeight = pInts[1];
 
-                    if (outWidth > 960 && outHeight > 540)  // 0x3bf=959, 0x21b=539 from decompiled code
-                    {
-                        pInfo.iWidth = outWidth;
-                        pInfo.iHeight = outHeight;
-                        Helper.Log.Write(Helper.eLogType.Info, $"T8 SDK: Capture successful! Resolution: {outWidth}x{outHeight}");
-                    }
-                    else
-                    {
-                        Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: Output dimensions seem invalid: {outWidth}x{outHeight}");
-                        // Still return success code if getVideoMainYUV succeeded
-                    }
+                if (outWidth > 960 && outHeight > 540)  // 0x3bf=959, 0x21b=539 from decompiled code
+                {
+                    pInfo.iWidth = outWidth;
+                    pInfo.iHeight = outHeight;
+                    Helper.Log.Write(Helper.eLogType.Info, $"T8 SDK: Capture successful! Resolution: {outWidth}x{outHeight}");
+                }
+                else
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: Output dimensions seem invalid: {outWidth}x{outHeight}");
+                    // Still return success code if getVideoMainYUV succeeded
                 }
 
                 return captureResult;
