@@ -32,19 +32,30 @@ namespace HyperTizen.SDK
             Helper.Log.Write(Helper.eLogType.Info, "");
             Helper.Log.Write(Helper.eLogType.Info, "=== Scanning for Alternative Capture Methods ===");
 
-            // 1. Search for all video/capture related libraries
-            SearchForLibraries();
+            // DO ALL TESTS FIRST (before heavy library scanning)
+            // These are quick and won't crash
 
-            // 2. Try T7 API (might still exist)
+            // 1. Try T7 API (might still exist) - TEST FIRST!
             TryT7API();
+
+            // 2. Test CAPI library directly (found by previous scan)
+            TestCapiVideoCapture();
 
             // 3. Try framebuffer access
             TryFrameBuffer();
 
-            // 4. Check for debug/developer libraries
+            // 4. Check for debug/developer libraries (just checks existence)
             CheckDeveloperLibraries();
 
-            // 5. Try alternative Samsung libraries
+            // THEN do heavy scanning (can be slow/crash)
+            Helper.Log.Write(Helper.eLogType.Info, "");
+            Helper.Log.Write(Helper.eLogType.Info, "--- Quick tests complete, starting library scan ---");
+            Helper.Log.Write(Helper.eLogType.Warning, "(This may take time and could disconnect WebSocket)");
+
+            // 5. Search for all video/capture related libraries
+            SearchForLibraries();
+
+            // 6. Try alternative Samsung libraries
             TryAlternativeSamsungLibs();
 
             Helper.Log.Write(Helper.eLogType.Info, "=== End Alternative Scan ===");
@@ -341,11 +352,6 @@ namespace HyperTizen.SDK
                     ProbeLibrary(lib);
                 }
             }
-
-            // TEST THE FOUND LIBRARIES!
-            Helper.Log.Write(Helper.eLogType.Info, "");
-            Helper.Log.Write(Helper.eLogType.Info, "--- Testing Found Capture Functions ---");
-            TestCapiVideoCapture();
         }
 
         // Test the libcapi-video-capture.so functions we found
