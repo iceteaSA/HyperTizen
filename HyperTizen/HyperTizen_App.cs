@@ -12,10 +12,13 @@ namespace HyperTizen
         {
             base.OnCreate();
             if (!Preference.Contains("enabled")) Preference.Set("enabled", "false");
-            
+
+            // Start WebSocket log server
+            Helper.Log.StartWebSocketServer(8765);
+
             // Run diagnostics to check which capture APIs are available
             DiagnosticCapture.RunDiagnostics();
-            
+
             Display.StateChanged += Display_StateChanged;
             client = new HyperionClient();
         }
@@ -63,6 +66,8 @@ namespace HyperTizen
 
         protected override void OnTerminate()
         {
+            // Stop WebSocket server
+            Helper.Log.StopWebSocketServer();
             base.OnTerminate();
         }
 

@@ -21,7 +21,25 @@ namespace HyperTizen.Helper
         // Store last 50 log messages for WebSocket/UI access
         private static readonly Queue<string> recentLogs = new Queue<string>(50);
         private static readonly object logLock = new object();
-        
+
+        // WebSocket server instance
+        private static LogWebSocketServer webSocketServer;
+
+        public static void StartWebSocketServer(int port = 8765)
+        {
+            if (webSocketServer == null)
+            {
+                webSocketServer = new LogWebSocketServer(port);
+                webSocketServer.Start();
+            }
+        }
+
+        public static void StopWebSocketServer()
+        {
+            webSocketServer?.Stop();
+            webSocketServer = null;
+        }
+
         public static List<string> GetRecentLogs()
         {
             lock (logLock)
@@ -39,7 +57,7 @@ namespace HyperTizen.Helper
         {
             string timestamp = DateTime.Now.ToString("HH:mm:ss");
             string logMessage = $"[{timestamp}] [{type}] {message}";
-            
+
             // Store in recent logs for WebSocket access
             lock (logLock)
             {
@@ -47,7 +65,17 @@ namespace HyperTizen.Helper
                     recentLogs.Dequeue();
                 recentLogs.Enqueue(logMessage);
             }
-            
+
+            // Broadcast to WebSocket clients
+            try
+            {
+                webSocketServer?.BroadcastLog(logMessage);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"WebSocket broadcast error: {ex.Message}");
+            }
+
             // Always write to Debug output
             Debug.WriteLine(logMessage);
             
