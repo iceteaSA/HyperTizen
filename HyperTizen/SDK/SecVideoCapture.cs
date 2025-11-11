@@ -281,7 +281,8 @@ namespace HyperTizen.SDK
         {
             IVideoCapture* inst = null;
 
-            // Try 0: Dynamic symbol probing (most flexible, tries all symbol variants)
+            // Try 1: Dynamic symbol probing (most flexible, tries all symbol variants)
+            // This is the best approach as it tests multiple symbol name variations
             try
             {
                 Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Attempting dynamic symbol probing...");
@@ -297,55 +298,24 @@ namespace HyperTizen.SDK
                 Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Dynamic probing failed: {ex.Message}");
             }
 
-            // Try 1: Mangled name from libvideo-capture.so.0.1.0
+            // Try 2: Standard P/Invoke with mangled name
             try
             {
-                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Trying _Z11getInstancev from libvideo-capture.so.0.1.0...");
+                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Trying _Z11getInstancev via P/Invoke...");
                 inst = GetInstanceMangled();
                 if (inst != null)
                 {
-                    Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Success with mangled name!");
+                    Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: ✓ Success with P/Invoke mangled name!");
                     return inst;
                 }
             }
             catch (Exception ex)
             {
-                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Failed mangled name: {ex.Message}");
-            }
-
-            // Try 2: Plain name from libvideo-capture-impl-sec.so
-            try
-            {
-                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Trying getInstance from libvideo-capture-impl-sec.so...");
-                inst = GetInstanceImplSec();
-                if (inst != null)
-                {
-                    Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Success with impl-sec library!");
-                    return inst;
-                }
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Failed impl-sec: {ex.Message}");
-            }
-
-            // Try 3: Mangled name from libvideo-capture-impl-sec.so
-            try
-            {
-                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Trying _Z11getInstancev from libvideo-capture-impl-sec.so...");
-                inst = GetInstanceImplSecMangled();
-                if (inst != null)
-                {
-                    Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Success with impl-sec mangled name!");
-                    return inst;
-                }
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Failed impl-sec mangled: {ex.Message}");
+                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: P/Invoke failed: {ex.Message}");
             }
 
             Helper.Log.Write(Helper.eLogType.Error, "T8 SDK: All getInstance attempts failed!");
+            Helper.Log.Write(Helper.eLogType.Error, "T8 SDK: The getInstance symbol may not exist, or requires different calling convention");
             return null;
         }
 
@@ -414,49 +384,44 @@ namespace HyperTizen.SDK
 
             Helper.Log.Write(Helper.eLogType.Info, "=== End Library Discovery ===");
 
-            // Try to load libvideo-capture-impl-sec.so and diagnose why it fails
-            Helper.Log.Write(Helper.eLogType.Info, "=== Probing libvideo-capture-impl-sec.so ===");
-            IntPtr implHandle = dlopen("/usr/lib/libvideo-capture-impl-sec.so", RTLD_NOW);
-            if (implHandle == IntPtr.Zero)
+            // Probe the main library (libvideo-capture.so.0.1.0) for exported functions
+            Helper.Log.Write(Helper.eLogType.Info, "=== Probing libvideo-capture.so.0.1.0 for exported functions ===");
+            IntPtr mainHandle = dlopen("/usr/lib/libvideo-capture.so.0.1.0", RTLD_NOW | RTLD_GLOBAL);
+            if (mainHandle == IntPtr.Zero)
             {
                 string error = dlerror();
-                Helper.Log.Write(Helper.eLogType.Warning, $"  ✗ Cannot load libvideo-capture-impl-sec.so: {error}");
-
-                // Try alternative paths
-                implHandle = dlopen("libvideo-capture-impl-sec.so", RTLD_NOW);
-                if (implHandle == IntPtr.Zero)
-                {
-                    error = dlerror();
-                    Helper.Log.Write(Helper.eLogType.Warning, $"  ✗ Cannot load without path: {error}");
-                }
-                else
-                {
-                    Helper.Log.Write(Helper.eLogType.Info, "  ✓ Loaded successfully without explicit path!");
-
-                    // Check for exported functions
-                    string[] functionsToCheck = new string[] { "getVideoMainYUV", "getVideoPostYUV", "Lock", "Unlock" };
-                    foreach (string func in functionsToCheck)
-                    {
-                        IntPtr funcPtr = dlsym(implHandle, func);
-                        Helper.Log.Write(Helper.eLogType.Info, $"    {func}: {(funcPtr != IntPtr.Zero ? "EXISTS" : "NOT FOUND")}");
-                    }
-
-                    dlclose(implHandle);
-                }
+                Helper.Log.Write(Helper.eLogType.Error, $"  ✗ Cannot load libvideo-capture.so.0.1.0: {error}");
             }
             else
             {
-                Helper.Log.Write(Helper.eLogType.Info, "  ✓ libvideo-capture-impl-sec.so loaded successfully!");
+                Helper.Log.Write(Helper.eLogType.Info, "  ✓ libvideo-capture.so.0.1.0 loaded successfully!");
 
-                // Check for exported functions
-                string[] functionsToCheck = new string[] { "getVideoMainYUV", "getVideoPostYUV", "Lock", "Unlock" };
+                // Check for exported functions (based on dev's info: these should be in the main library)
+                string[] functionsToCheck = new string[] {
+                    "getVideoMainYUV",
+                    "getVideoPostYUV",
+                    "Lock",
+                    "Unlock",
+                    "getInstance",
+                    "_Z11getInstancev",
+                    "_ZN13IVideoCapture11getInstanceEv"
+                };
+
                 foreach (string func in functionsToCheck)
                 {
-                    IntPtr funcPtr = dlsym(implHandle, func);
-                    Helper.Log.Write(Helper.eLogType.Info, $"    {func}: {(funcPtr != IntPtr.Zero ? "EXISTS" : "NOT FOUND")}");
+                    IntPtr funcPtr = dlsym(mainHandle, func);
+                    if (funcPtr != IntPtr.Zero)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, $"    ✓ {func}: FOUND at 0x{funcPtr.ToInt64():X}");
+                    }
+                    else
+                    {
+                        Helper.Log.Write(Helper.eLogType.Debug, $"    ✗ {func}: NOT FOUND");
+                    }
                 }
 
-                dlclose(implHandle);
+                // Don't close the handle yet - we might need it for getInstance
+                // dlclose(mainHandle);
             }
             Helper.Log.Write(Helper.eLogType.Info, "=== End Probing ===");
 
@@ -655,50 +620,37 @@ namespace HyperTizen.SDK
             input.pYBuffer = pInfo.pImageY;
             input.pUVBuffer = pInfo.pImageUV;
 
-            // Try direct function from main library first
+            // Call getVideoMainYUV from libvideo-capture.so.0.1.0
+            // (libvideo-capture-impl-sec.so does not exist on this TV)
             try
             {
-                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Trying getVideoMainYUV from libvideo-capture.so.0.1.0...");
+                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Calling getVideoMainYUV directly...");
                 fixed (byte* pOutput = outputBuffer)
                 {
                     int result = GetVideoMainYUVDirectMain(instance, ref input, pOutput);
-                    Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Main library returned: {result}");
+                    Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: getVideoMainYUV returned: {result}");
 
                     if (result == 0 || result == 4)
                     {
-                        return ParseDirectCaptureResult(result, pOutput, ref pInfo, "main library");
+                        return ParseDirectCaptureResult(result, pOutput, ref pInfo, "libvideo-capture.so.0.1.0");
+                    }
+                    else if (result == -4)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "T8 SDK: DRM content detected (result: -4)");
+                        return result;
+                    }
+                    else
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: getVideoMainYUV returned unexpected code: {result}");
+                        throw new Exception($"Direct function call returned {result}");
                     }
                 }
             }
             catch (Exception ex)
             {
-                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Main library failed: {ex.Message}");
-            }
-
-            // Try direct function from impl-sec library as fallback
-            try
-            {
-                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Trying getVideoMainYUV from libvideo-capture-impl-sec.so...");
-                fixed (byte* pOutput = outputBuffer)
-                {
-                    int result = GetVideoMainYUVDirectImpl(instance, ref input, pOutput);
-                    Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Impl-sec library returned: {result}");
-
-                    if (result == 0 || result == 4)
-                    {
-                        return ParseDirectCaptureResult(result, pOutput, ref pInfo, "impl-sec library");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Impl-sec library failed: {ex.Message}");
+                Helper.Log.Write(Helper.eLogType.Error, $"T8 SDK: Direct function call failed: {ex.Message}");
                 throw; // Re-throw to let caller try vtable method
             }
-
-            // If we got here, both failed
-            Helper.Log.Write(Helper.eLogType.Warning, "T8 SDK: All direct function attempts failed");
-            return -99;
         }
 
         private static int ParseDirectCaptureResult(int result, byte* pOutput, ref Info_t pInfo, string source)
