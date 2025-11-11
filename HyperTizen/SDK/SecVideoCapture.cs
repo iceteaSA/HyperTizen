@@ -195,86 +195,46 @@ namespace HyperTizen.SDK
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate IVideoCapture* GetInstanceDelegate();
 
-        private static void SearchForLibraries()
+        private static void LogKnownLibraryInfo()
         {
-            Helper.Log.Write(Helper.eLogType.Info, "=== Comprehensive Library Search (with delays to prevent crashes) ===");
+            Helper.Log.Write(Helper.eLogType.Info, "=== Known Library Information (from previous scans) ===");
+            Helper.Log.Write(Helper.eLogType.Info, "  Known to exist:");
+            Helper.Log.Write(Helper.eLogType.Info, "    /usr/lib/libvideo-capture.so.0");
+            Helper.Log.Write(Helper.eLogType.Info, "    /usr/lib/libvideo-capture.so.0.1.0");
+            Helper.Log.Write(Helper.eLogType.Info, "    /usr/lib/libcapi-video-capture.so*");
+            Helper.Log.Write(Helper.eLogType.Info, "  Known NOT to exist:");
+            Helper.Log.Write(Helper.eLogType.Info, "    /usr/lib/libvideo-capture-impl-sec.so (does not exist on Tizen 8+)");
+            Helper.Log.Write(Helper.eLogType.Info, "");
+            Helper.Log.Write(Helper.eLogType.Info, "  Quick verification using direct file checks:");
 
-            // Comprehensive search with delays between operations
-            string[] searchCommands = new string[] {
-                // Standard library paths
-                "find /usr/lib -maxdepth 2 -name '*video*capture*' 2>/dev/null | head -20",
-                "find /usr/lib64 -maxdepth 2 -name '*video*capture*' 2>/dev/null | head -10",
-                "find /opt/usr/lib -maxdepth 2 -name '*video*capture*' 2>/dev/null | head -10",
-                "find /lib -maxdepth 2 -name '*video*capture*' 2>/dev/null | head -10",
-
-                // Vendor/system paths
-                "find /usr/vendor -maxdepth 3 -name '*video*capture*' 2>/dev/null | head -10",
-                "find /vendor -maxdepth 3 -name '*video*capture*' 2>/dev/null | head -10",
-                "find /system/lib -maxdepth 2 -name '*video*capture*' 2>/dev/null | head -10",
-
-                // Opt tree
-                "find /opt -maxdepth 3 -name '*video*capture*' 2>/dev/null | head -10",
-
-                // Linker cache
-                "ldconfig -p 2>/dev/null | grep -i video | grep -i capture | head -10",
-
-                // Additional checks
-                "ls -lh /usr/lib/*video*.so* 2>/dev/null | head -20",
-                "cat /proc/self/maps 2>/dev/null | grep -i video | head -10",
-                "ldd /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null | head -20"
+            // Quick, safe verification using File.Exists (no shell commands)
+            string[] checkPaths = new string[] {
+                "/usr/lib/libvideo-capture.so.0.1.0",
+                "/usr/lib/libvideo-capture.so.0",
+                "/usr/lib/libcapi-video-capture.so.0.1.0"
             };
 
-            int searchNum = 0;
-            foreach (string cmd in searchCommands)
+            foreach (string path in checkPaths)
             {
-                searchNum++;
                 try
                 {
-                    Helper.Log.Write(Helper.eLogType.Info, $"  [{searchNum}/{searchCommands.Length}] Running: {cmd.Substring(0, Math.Min(60, cmd.Length))}...");
-
-                    var process = new System.Diagnostics.Process();
-                    process.StartInfo.FileName = "/bin/sh";
-                    process.StartInfo.Arguments = $"-c \"{cmd}\"";
-                    process.StartInfo.RedirectStandardOutput = true;
-                    process.StartInfo.RedirectStandardError = true;
-                    process.StartInfo.UseShellExecute = false;
-                    process.Start();
-
-                    // 2 second timeout per command
-                    if (process.WaitForExit(2000))
+                    if (System.IO.File.Exists(path))
                     {
-                        string output = process.StandardOutput.ReadToEnd();
-                        if (!string.IsNullOrWhiteSpace(output))
-                        {
-                            foreach (string line in output.Split('\n'))
-                            {
-                                if (!string.IsNullOrWhiteSpace(line))
-                                {
-                                    Helper.Log.Write(Helper.eLogType.Info, $"    {line.Trim()}");
-                                }
-                            }
-                        }
-                        else
-                        {
-                            Helper.Log.Write(Helper.eLogType.Debug, "    (no results)");
-                        }
+                        var fileInfo = new System.IO.FileInfo(path);
+                        Helper.Log.Write(Helper.eLogType.Info, $"    ✓ {path} ({fileInfo.Length} bytes)");
                     }
                     else
                     {
-                        try { process.Kill(); } catch { }
-                        Helper.Log.Write(Helper.eLogType.Debug, "    (timed out)");
+                        Helper.Log.Write(Helper.eLogType.Debug, $"    ✗ {path} (not found)");
                     }
-
-                    // Sleep 200ms between searches to prevent overwhelming the system
-                    System.Threading.Thread.Sleep(200);
                 }
                 catch (Exception ex)
                 {
-                    Helper.Log.Write(Helper.eLogType.Debug, $"    Search failed: {ex.Message}");
+                    Helper.Log.Write(Helper.eLogType.Debug, $"    ? {path} (error: {ex.Message})");
                 }
             }
 
-            Helper.Log.Write(Helper.eLogType.Info, "=== End Comprehensive Search ===");
+            Helper.Log.Write(Helper.eLogType.Info, "=== End Known Library Information ===");
         }
 
         private static IVideoCapture* TryGetInstance()
@@ -327,69 +287,17 @@ namespace HyperTizen.SDK
                 return;
             }
 
-            // First: Quick library search (safe, won't crash)
+            // First: Log known library info (instant, no shell commands)
             try
             {
-                SearchForLibraries();
+                LogKnownLibraryInfo();
             }
             catch (Exception ex)
             {
-                Helper.Log.Write(Helper.eLogType.Warning, $"Library search failed: {ex.Message}");
+                Helper.Log.Write(Helper.eLogType.Warning, $"Library info logging failed: {ex.Message}");
             }
 
-            // Second: Check specific paths
-            Helper.Log.Write(Helper.eLogType.Info, "=== T8 SDK Library Discovery ===");
-
-            // Common library search paths on Tizen
-            string[] searchPaths = new string[] {
-                "/usr/lib",
-                "/opt/usr/lib",
-                "/lib",
-                "/usr/local/lib"
-            };
-
-            string[] libraryNames = new string[] {
-                "libvideo-capture.so",
-                "libvideo-capture.so.0",
-                "libvideo-capture.so.0.1",
-                "libvideo-capture.so.0.1.0",
-                "libvideo-capture-impl-sec.so",
-                "libvideo-capture-impl-sec.so.0",
-                "libvideo-capture-impl-sec.so.0.1",
-                "libvideo-capture-impl-sec.so.0.1.0"
-            };
-
-            foreach (string searchPath in searchPaths)
-            {
-                if (System.IO.Directory.Exists(searchPath))
-                {
-                    foreach (string libName in libraryNames)
-                    {
-                        string fullPath = System.IO.Path.Combine(searchPath, libName);
-                        if (System.IO.File.Exists(fullPath))
-                        {
-                            Helper.Log.Write(Helper.eLogType.Info, $"  ✓ FOUND: {fullPath}");
-
-                            // Check if it's a symlink by comparing file sizes
-                            try
-                            {
-                                var fileInfo = new System.IO.FileInfo(fullPath);
-                                if (fileInfo.Length < 100)
-                                {
-                                    Helper.Log.Write(Helper.eLogType.Debug, $"    (likely symlink, {fileInfo.Length} bytes)");
-                                }
-                                else
-                                {
-                                    Helper.Log.Write(Helper.eLogType.Debug, $"    (actual library, {fileInfo.Length} bytes)");
-                                }
-                            }
-                            catch { }
-                        }
-                    }
-                }
-            }
-
-            Helper.Log.Write(Helper.eLogType.Info, "=== End Library Discovery ===");
+            // Skip the heavy library discovery section - already done above with LogKnownLibraryInfo()
 
             // Probe the main library (libvideo-capture.so.0.1.0) for exported functions
             try
