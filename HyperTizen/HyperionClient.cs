@@ -140,6 +140,30 @@ namespace HyperTizen
                     Helper.Log.Write(Helper.eLogType.Warning,
                         "======================");
 
+                    // TEST SCREEN CAPTURE (if Tizen 8+)
+                    if (SystemInfo.TizenVersionMajor >= 8)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, "");
+                        Helper.Log.Write(Helper.eLogType.Info, "Running screen capture test...");
+                        try
+                        {
+                            bool testPassed = SDK.SecVideoCaptureT8.TestCapture();
+                            if (testPassed)
+                            {
+                                Helper.Log.Write(Helper.eLogType.Info, "🎉 SCREEN CAPTURE TEST PASSED!");
+                            }
+                            else
+                            {
+                                Helper.Log.Write(Helper.eLogType.Warning, "⚠️ Screen capture test did not pass - check logs above");
+                            }
+                        }
+                        catch (Exception testEx)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Error, $"Screen capture test exception: {testEx.Message}");
+                        }
+                        Helper.Log.Write(Helper.eLogType.Info, "");
+                    }
+
                     // Show notification
                     Notification diagNotif = new Notification
                     {

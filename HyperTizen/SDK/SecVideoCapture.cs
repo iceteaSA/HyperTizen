@@ -555,6 +555,93 @@ namespace HyperTizen.SDK
             DumpVTableInfo();
         }
 
+        /// <summary>
+        /// Test function to verify screen capture works with the VTable API
+        /// This should be called during diagnostic mode to validate the implementation
+        /// </summary>
+        public static bool TestCapture()
+        {
+            if (!isInitialized)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, "TestCapture: SecVideoCaptureT8 not initialized");
+                return false;
+            }
+
+            Helper.Log.Write(Helper.eLogType.Info, "=== Testing Screen Capture ===");
+
+            try
+            {
+                // Allocate test buffers (same size as reference code)
+                int bufferSize = 0x7e900; // 518,400 bytes (from GetCaptureFromTZ.c)
+                byte[] yBuffer = new byte[bufferSize];
+                byte[] uvBuffer = new byte[bufferSize];
+
+                fixed (byte* pY = yBuffer, pUV = uvBuffer)
+                {
+                    // Create Info_t structure
+                    Info_t testInfo = new Info_t();
+                    testInfo.pImageY = (IntPtr)pY;
+                    testInfo.pImageUV = (IntPtr)pUV;
+                    testInfo.iGivenBufferSize1 = bufferSize;
+                    testInfo.iGivenBufferSize2 = bufferSize;
+
+                    // Test 1: VTable API (Lock -> getVideoMainYUV -> Unlock)
+                    Helper.Log.Write(Helper.eLogType.Info, "Test 1: VTable API with Lock/Unlock");
+                    int result = CaptureScreenNewApi(1920, 1080, ref testInfo);
+
+                    if (result == 0 || result == 4)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, $"✓ VTable API SUCCESS! Result: {result}");
+                        Helper.Log.Write(Helper.eLogType.Info, $"  Captured resolution: {testInfo.iWidth}x{testInfo.iHeight}");
+                        Helper.Log.Write(Helper.eLogType.Info, $"  Y buffer first 16 bytes: {BitConverter.ToString(yBuffer, 0, 16)}");
+                        Helper.Log.Write(Helper.eLogType.Info, $"  UV buffer first 16 bytes: {BitConverter.ToString(uvBuffer, 0, 16)}");
+
+                        // Check if we got actual data (not all zeros)
+                        bool hasData = false;
+                        for (int i = 0; i < 1000; i++)
+                        {
+                            if (yBuffer[i] != 0 || uvBuffer[i] != 0)
+                            {
+                                hasData = true;
+                                break;
+                            }
+                        }
+
+                        if (hasData)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Info, "✓ Buffers contain non-zero data - capture appears valid!");
+                        }
+                        else
+                        {
+                            Helper.Log.Write(Helper.eLogType.Warning, "⚠ Buffers are all zeros - may need investigation");
+                        }
+
+                        Helper.Log.Write(Helper.eLogType.Info, "=== Screen Capture Test PASSED ===");
+                        return true;
+                    }
+                    else if (result == -4)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "✗ VTable API returned -4 (DRM content)");
+                        Helper.Log.Write(Helper.eLogType.Info, "=== Screen Capture Test: DRM protected content ===");
+                        return false;
+                    }
+                    else
+                    {
+                        Helper.Log.Write(Helper.eLogType.Error, $"✗ VTable API FAILED with code: {result}");
+                        Helper.Log.Write(Helper.eLogType.Info, "=== Screen Capture Test FAILED ===");
+                        return false;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"TestCapture exception: {ex.Message}");
+                Helper.Log.Write(Helper.eLogType.Error, $"Stack trace: {ex.StackTrace}");
+                Helper.Log.Write(Helper.eLogType.Info, "=== Screen Capture Test FAILED (Exception) ===");
+                return false;
+            }
+        }
+
         public static int CaptureScreen(int w, int h, ref Info_t pInfo)
         {
             if (!isInitialized)
