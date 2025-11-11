@@ -18,8 +18,8 @@ namespace HyperTizen.Helper
     }
     public static class Log
     {
-        // Store last 50 log messages for WebSocket/UI access
-        private static readonly Queue<string> recentLogs = new Queue<string>(50);
+        // Store last 1000 log messages for WebSocket/UI access (increased from 50)
+        private static readonly Queue<string> recentLogs = new Queue<string>(1000);
         private static readonly object logLock = new object();
 
         // WebSocket server instance
@@ -61,7 +61,7 @@ namespace HyperTizen.Helper
             // Store in recent logs for WebSocket access
             lock (logLock)
             {
-                if (recentLogs.Count >= 50)
+                if (recentLogs.Count >= 1000)
                     recentLogs.Dequeue();
                 recentLogs.Enqueue(logMessage);
             }
