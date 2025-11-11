@@ -25,7 +25,7 @@ namespace HyperTizen.Helper
         // WebSocket server instance
         private static LogWebSocketServer webSocketServer;
 
-        public static void StartWebSocketServer(int port = 8765)
+        public static void StartWebSocketServer(int port = 45678)
         {
             if (webSocketServer == null)
             {

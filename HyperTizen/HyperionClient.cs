@@ -134,7 +134,7 @@ namespace HyperTizen
                     Helper.Log.Write(Helper.eLogType.Warning,
                         "Initialization complete. Pausing for 10 minutes...");
                     Helper.Log.Write(Helper.eLogType.Warning,
-                        "Connect to WebSocket at http://<TV_IP>:8765 to view ALL logs");
+                        "Connect to WebSocket at http://<TV_IP>:45678 to view ALL logs");
                     Helper.Log.Write(Helper.eLogType.Warning,
                         "App will stay alive for 10 minutes, then exit gracefully");
                     Helper.Log.Write(Helper.eLogType.Warning,

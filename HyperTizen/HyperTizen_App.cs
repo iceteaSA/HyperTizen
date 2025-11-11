@@ -13,8 +13,8 @@ namespace HyperTizen
             base.OnCreate();
             if (!Preference.Contains("enabled")) Preference.Set("enabled", "false");
 
-            // Start WebSocket log server
-            Helper.Log.StartWebSocketServer(8765);
+            // Start WebSocket log server on unusual port to avoid conflicts
+            Helper.Log.StartWebSocketServer(45678);
 
             // Run diagnostics to check which capture APIs are available
             DiagnosticCapture.RunDiagnostics();
