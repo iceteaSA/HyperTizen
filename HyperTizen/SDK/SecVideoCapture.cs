@@ -34,6 +34,22 @@ namespace HyperTizen.SDK
 
     public static unsafe class SecVideoCaptureT8 //for Tizen 8 and above
     {
+        // dlopen/dlsym for dynamic library inspection
+        [DllImport("libdl.so.2", CallingConvention = CallingConvention.Cdecl)]
+        private static extern IntPtr dlopen(string filename, int flags);
+
+        [DllImport("libdl.so.2", CallingConvention = CallingConvention.Cdecl)]
+        private static extern IntPtr dlsym(IntPtr handle, string symbol);
+
+        [DllImport("libdl.so.2", CallingConvention = CallingConvention.Cdecl)]
+        private static extern string dlerror();
+
+        [DllImport("libdl.so.2", CallingConvention = CallingConvention.Cdecl)]
+        private static extern int dlclose(IntPtr handle);
+
+        private const int RTLD_NOW = 2;
+        private const int RTLD_GLOBAL = 256;
+
         // Structure for input parameters to getVideoMainYUV
         [StructLayout(LayoutKind.Sequential)]
         public unsafe struct InputParams
@@ -113,9 +129,173 @@ namespace HyperTizen.SDK
         [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getVideoPostYUV")]
         private static extern int GetVideoPostYUVDirectImpl(IVideoCapture* instance, ref InputParams input, byte* output);
 
+        private static IVideoCapture* ProbeForGetInstance()
+        {
+            // Try to load the library dynamically and probe for getInstance
+            IntPtr handle = dlopen("/usr/lib/libvideo-capture.so.0.1.0", RTLD_NOW);
+            if (handle == IntPtr.Zero)
+            {
+                string error = dlerror();
+                Helper.Log.Write(Helper.eLogType.Error, $"T8 SDK: dlopen failed: {error}");
+                return null;
+            }
+
+            Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Library loaded with dlopen, probing for getInstance...");
+
+            // Try different getInstance symbol names
+            string[] symbolsToTry = new string[] {
+                "getInstance",                          // Plain C name
+                "_Z11getInstancev",                     // C++ mangled, no namespace
+                "_ZN13IVideoCapture11getInstanceEv",    // C++ with IVideoCapture namespace
+                "_ZN13IVideoCapture11getInstanceERv",   // Alternative mangling
+                "_ZL11getInstancev",                    // Static function
+                "IVideoCapture_getInstance",            // Alternative naming
+                "_getInstance"                           // Underscore prefix
+            };
+
+            IntPtr funcPtr = IntPtr.Zero;
+            string workingSymbol = null;
+
+            foreach (string symbol in symbolsToTry)
+            {
+                funcPtr = dlsym(handle, symbol);
+                if (funcPtr != IntPtr.Zero)
+                {
+                    workingSymbol = symbol;
+                    Helper.Log.Write(Helper.eLogType.Info, $"T8 SDK: ✓ Found getInstance at symbol '{symbol}'!");
+                    break;
+                }
+            }
+
+            if (funcPtr == IntPtr.Zero)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, "T8 SDK: getInstance symbol not found with any name variant");
+                dlclose(handle);
+                return null;
+            }
+
+            // Call the function pointer
+            try
+            {
+                // Cast function pointer to delegate
+                var getInstanceFunc = (GetInstanceDelegate)Marshal.GetDelegateForFunctionPointer(funcPtr, typeof(GetInstanceDelegate));
+                IVideoCapture* instance = getInstanceFunc();
+
+                Helper.Log.Write(Helper.eLogType.Info, $"T8 SDK: getInstance() called successfully via dlsym! Symbol: {workingSymbol}");
+                return instance;
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"T8 SDK: getInstance() call failed: {ex.Message}");
+                dlclose(handle);
+                return null;
+            }
+        }
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate IVideoCapture* GetInstanceDelegate();
+
+        private static void SearchForLibraries()
+        {
+            Helper.Log.Write(Helper.eLogType.Info, "=== System-wide Library Search ===");
+
+            // Search common locations for video-capture libraries
+            string[] searchCommands = new string[] {
+                "find /usr/lib -name '*video-capture*' 2>/dev/null",
+                "find /opt/usr/lib -name '*video-capture*' 2>/dev/null",
+                "find /lib -name '*video-capture*' 2>/dev/null",
+                "ldconfig -p | grep video-capture"
+            };
+
+            foreach (string cmd in searchCommands)
+            {
+                try
+                {
+                    var process = new System.Diagnostics.Process();
+                    process.StartInfo.FileName = "/bin/sh";
+                    process.StartInfo.Arguments = $"-c \"{cmd}\"";
+                    process.StartInfo.RedirectStandardOutput = true;
+                    process.StartInfo.RedirectStandardError = true;
+                    process.StartInfo.UseShellExecute = false;
+                    process.Start();
+
+                    string output = process.StandardOutput.ReadToEnd();
+                    process.WaitForExit(2000);
+
+                    if (!string.IsNullOrWhiteSpace(output))
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, $"  Results from: {cmd}");
+                        foreach (string line in output.Split('\n'))
+                        {
+                            if (!string.IsNullOrWhiteSpace(line))
+                            {
+                                Helper.Log.Write(Helper.eLogType.Info, $"    {line.Trim()}");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Debug, $"  Search command failed: {ex.Message}");
+                }
+            }
+
+            // Check loaded libraries in current process
+            try
+            {
+                Helper.Log.Write(Helper.eLogType.Info, "  Currently loaded libraries:");
+                var process = new System.Diagnostics.Process();
+                process.StartInfo.FileName = "/bin/sh";
+                process.StartInfo.Arguments = $"-c \"cat /proc/{System.Diagnostics.Process.GetCurrentProcess().Id}/maps | grep video-capture\"";
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.UseShellExecute = false;
+                process.Start();
+
+                string output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit(1000);
+
+                if (!string.IsNullOrWhiteSpace(output))
+                {
+                    foreach (string line in output.Split('\n'))
+                    {
+                        if (!string.IsNullOrWhiteSpace(line))
+                        {
+                            Helper.Log.Write(Helper.eLogType.Info, $"    {line.Trim()}");
+                        }
+                    }
+                }
+                else
+                {
+                    Helper.Log.Write(Helper.eLogType.Info, "    (none loaded yet)");
+                }
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Debug, $"  Failed to check loaded libs: {ex.Message}");
+            }
+
+            Helper.Log.Write(Helper.eLogType.Info, "=== End System Search ===");
+        }
+
         private static IVideoCapture* TryGetInstance()
         {
             IVideoCapture* inst = null;
+
+            // Try 0: Dynamic symbol probing (most flexible, tries all symbol variants)
+            try
+            {
+                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Attempting dynamic symbol probing...");
+                inst = ProbeForGetInstance();
+                if (inst != null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: ✓ Success with dynamic probing!");
+                    return inst;
+                }
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Dynamic probing failed: {ex.Message}");
+            }
 
             // Try 1: Mangled name from libvideo-capture.so.0.1.0
             try
@@ -177,25 +357,108 @@ namespace HyperTizen.SDK
                 return;
             }
 
-            // Discover available libraries
+            // First: System-wide search for libraries
+            SearchForLibraries();
+
+            // Second: Check specific paths
             Helper.Log.Write(Helper.eLogType.Info, "=== T8 SDK Library Discovery ===");
-            string[] librariesToCheck = new string[] {
-                "/usr/lib/libvideo-capture.so",
-                "/usr/lib/libvideo-capture.so.0",
-                "/usr/lib/libvideo-capture.so.0.1",
-                "/usr/lib/libvideo-capture.so.0.1.0",
-                "/usr/lib/libvideo-capture-impl-sec.so",
-                "/usr/lib/libvideo-capture-impl-sec.so.0",
-                "/usr/lib/libvideo-capture-impl-sec.so.0.1",
-                "/usr/lib/libvideo-capture-impl-sec.so.0.1.0"
+
+            // Common library search paths on Tizen
+            string[] searchPaths = new string[] {
+                "/usr/lib",
+                "/opt/usr/lib",
+                "/lib",
+                "/usr/local/lib"
             };
 
-            foreach (string lib in librariesToCheck)
+            string[] libraryNames = new string[] {
+                "libvideo-capture.so",
+                "libvideo-capture.so.0",
+                "libvideo-capture.so.0.1",
+                "libvideo-capture.so.0.1.0",
+                "libvideo-capture-impl-sec.so",
+                "libvideo-capture-impl-sec.so.0",
+                "libvideo-capture-impl-sec.so.0.1",
+                "libvideo-capture-impl-sec.so.0.1.0"
+            };
+
+            foreach (string searchPath in searchPaths)
             {
-                bool exists = System.IO.File.Exists(lib);
-                Helper.Log.Write(Helper.eLogType.Info, $"  {lib}: {(exists ? "EXISTS" : "NOT FOUND")}");
+                if (System.IO.Directory.Exists(searchPath))
+                {
+                    foreach (string libName in libraryNames)
+                    {
+                        string fullPath = System.IO.Path.Combine(searchPath, libName);
+                        if (System.IO.File.Exists(fullPath))
+                        {
+                            Helper.Log.Write(Helper.eLogType.Info, $"  ✓ FOUND: {fullPath}");
+
+                            // Check if it's a symlink by comparing file sizes
+                            try
+                            {
+                                var fileInfo = new System.IO.FileInfo(fullPath);
+                                if (fileInfo.Length < 100)
+                                {
+                                    Helper.Log.Write(Helper.eLogType.Debug, $"    (likely symlink, {fileInfo.Length} bytes)");
+                                }
+                                else
+                                {
+                                    Helper.Log.Write(Helper.eLogType.Debug, $"    (actual library, {fileInfo.Length} bytes)");
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
             }
+
             Helper.Log.Write(Helper.eLogType.Info, "=== End Library Discovery ===");
+
+            // Try to load libvideo-capture-impl-sec.so and diagnose why it fails
+            Helper.Log.Write(Helper.eLogType.Info, "=== Probing libvideo-capture-impl-sec.so ===");
+            IntPtr implHandle = dlopen("/usr/lib/libvideo-capture-impl-sec.so", RTLD_NOW);
+            if (implHandle == IntPtr.Zero)
+            {
+                string error = dlerror();
+                Helper.Log.Write(Helper.eLogType.Warning, $"  ✗ Cannot load libvideo-capture-impl-sec.so: {error}");
+
+                // Try alternative paths
+                implHandle = dlopen("libvideo-capture-impl-sec.so", RTLD_NOW);
+                if (implHandle == IntPtr.Zero)
+                {
+                    error = dlerror();
+                    Helper.Log.Write(Helper.eLogType.Warning, $"  ✗ Cannot load without path: {error}");
+                }
+                else
+                {
+                    Helper.Log.Write(Helper.eLogType.Info, "  ✓ Loaded successfully without explicit path!");
+
+                    // Check for exported functions
+                    string[] functionsToCheck = new string[] { "getVideoMainYUV", "getVideoPostYUV", "Lock", "Unlock" };
+                    foreach (string func in functionsToCheck)
+                    {
+                        IntPtr funcPtr = dlsym(implHandle, func);
+                        Helper.Log.Write(Helper.eLogType.Info, $"    {func}: {(funcPtr != IntPtr.Zero ? "EXISTS" : "NOT FOUND")}");
+                    }
+
+                    dlclose(implHandle);
+                }
+            }
+            else
+            {
+                Helper.Log.Write(Helper.eLogType.Info, "  ✓ libvideo-capture-impl-sec.so loaded successfully!");
+
+                // Check for exported functions
+                string[] functionsToCheck = new string[] { "getVideoMainYUV", "getVideoPostYUV", "Lock", "Unlock" };
+                foreach (string func in functionsToCheck)
+                {
+                    IntPtr funcPtr = dlsym(implHandle, func);
+                    Helper.Log.Write(Helper.eLogType.Info, $"    {func}: {(funcPtr != IntPtr.Zero ? "EXISTS" : "NOT FOUND")}");
+                }
+
+                dlclose(implHandle);
+            }
+            Helper.Log.Write(Helper.eLogType.Info, "=== End Probing ===");
 
             // Check if main library file exists
             if (!System.IO.File.Exists("/usr/lib/libvideo-capture.so.0.1.0"))
