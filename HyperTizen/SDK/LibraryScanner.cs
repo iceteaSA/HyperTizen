@@ -47,24 +47,14 @@ namespace HyperTizen.SDK
                     Helper.Log.Write(Helper.eLogType.Error, $"T7 API test crashed: {ex.Message}");
                 }
 
-                // 2. Test CAPI library directly (found by previous scan)
+                // 2. Test promising libraries using dynamic loading (safer than DllImport)
                 try
                 {
-                    TestCapiVideoCapture();
+                    TestPromisingLibraries();
                 }
                 catch (Exception ex)
                 {
-                    Helper.Log.Write(Helper.eLogType.Error, $"CAPI test crashed: {ex.Message}");
-                }
-
-                // 3. Test Dali extension library (found by previous scan)
-                try
-                {
-                    TestDaliExtensionVideoCanvas();
-                }
-                catch (Exception ex)
-                {
-                    Helper.Log.Write(Helper.eLogType.Error, $"Dali extension test crashed: {ex.Message}");
+                    Helper.Log.Write(Helper.eLogType.Error, $"Promising libraries test crashed: {ex.Message}");
                 }
 
                 // 4. Try framebuffer access
@@ -443,176 +433,84 @@ namespace HyperTizen.SDK
             }
         }
 
-        // Test the libcapi-video-capture.so functions we found
-        [DllImport("/usr/lib/libcapi-video-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen_video_only")]
-        private static extern int CapiCaptureScreenVideo(int w, int h, ref SecVideoCapture.Info_t pInfo);
-
-        [DllImport("/usr/lib/libcapi-video-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen")]
-        private static extern int CapiCaptureScreen(int w, int h, ref SecVideoCapture.Info_t pInfo);
-
-        [DllImport("/usr/lib/libcapi-video-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen_unlock")]
-        private static extern int CapiCaptureScreenUnlock();
-
-        private static void TestCapiVideoCapture()
+        /// <summary>
+        /// Test promising libraries found by previous scans using SAFE dynamic loading
+        /// Uses dlopen/dlsym to avoid DllImport crashes
+        /// </summary>
+        private static void TestPromisingLibraries()
         {
-            Helper.Log.Write(Helper.eLogType.Info, "Testing libcapi-video-capture.so.0.1.0...");
+            Helper.Log.Write(Helper.eLogType.Info, "--- Testing Promising Libraries (Dynamic Loading) ---");
 
-            try
+            // List of libraries that had T7 API functions in previous scans
+            string[] promisingLibs = new string[] {
+                "/usr/lib/libdali-extension-tv-video-canvas.so.0.1.0",
+                "/usr/lib/libdali-extension-tv-video-canvas.so.0",
+                "/usr/lib/libdali-extension-tv-video-canvas.so"
+            };
+
+            string[] testFunctions = new string[] {
+                "secvideo_api_capture_screen_video_only",
+                "secvideo_api_capture_screen"
+            };
+
+            foreach (string libPath in promisingLibs)
             {
-                // Allocate test buffers
-                int bufferSize = 0x7e900; // 518,400 bytes
-                byte[] yBuffer = new byte[bufferSize];
-                byte[] uvBuffer = new byte[bufferSize];
+                if (!File.Exists(libPath))
+                    continue;
 
-                fixed (byte* pY = yBuffer, pUV = uvBuffer)
+                Helper.Log.Write(Helper.eLogType.Info, $"Testing {Path.GetFileName(libPath)}...");
+
+                IntPtr handle = IntPtr.Zero;
+                try
                 {
-                    SecVideoCapture.Info_t testInfo = new SecVideoCapture.Info_t();
-                    testInfo.pImageY = (IntPtr)pY;
-                    testInfo.pImageUV = (IntPtr)pUV;
-                    testInfo.iGivenBufferSize1 = bufferSize;
-                    testInfo.iGivenBufferSize2 = bufferSize;
-
-                    // Test 1: secvideo_api_capture_screen_video_only (most reliable)
-                    Helper.Log.Write(Helper.eLogType.Info, "  Test 1: secvideo_api_capture_screen_video_only()");
-                    int result = CapiCaptureScreenVideo(1920, 1080, ref testInfo);
-
-                    if (result == 0)
+                    // Try to load library with dlopen
+                    handle = dlopen(libPath, RTLD_NOW);
+                    if (handle == IntPtr.Zero)
                     {
-                        Helper.Log.Write(Helper.eLogType.Info, "  ✅✅✅ CAPI VIDEO CAPTURE WORKS! ✅✅✅");
-                        Helper.Log.Write(Helper.eLogType.Info, $"  Captured resolution: {testInfo.iWidth}x{testInfo.iHeight}");
-                        Helper.Log.Write(Helper.eLogType.Info, $"  Y buffer first 16 bytes: {BitConverter.ToString(yBuffer, 0, 16)}");
-                        Helper.Log.Write(Helper.eLogType.Info, "  ⭐⭐⭐ USE LIBCAPI-VIDEO-CAPTURE.SO! ⭐⭐⭐");
-                        return;
+                        string error = dlerror();
+                        Helper.Log.Write(Helper.eLogType.Debug, $"  Cannot load: {error}");
+                        continue;
                     }
-                    else if (result == -4)
+
+                    Helper.Log.Write(Helper.eLogType.Info, $"  ✓ Library loaded successfully");
+
+                    // Check if test functions exist
+                    bool hasCaptureFunctions = false;
+                    foreach (string funcName in testFunctions)
                     {
-                        Helper.Log.Write(Helper.eLogType.Warning, "  Result: -4 (DRM protected content)");
-                        Helper.Log.Write(Helper.eLogType.Info, "  ⭐ CAPI API works - try on non-DRM content!");
-                        return;
+                        IntPtr funcPtr = dlsym(handle, funcName);
+                        if (funcPtr != IntPtr.Zero)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Info, $"  ✓ Found: {funcName} @ 0x{funcPtr.ToInt64():X}");
+                            hasCaptureFunctions = true;
+                        }
+                    }
+
+                    if (hasCaptureFunctions)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, $"  ⭐ {Path.GetFileName(libPath)} HAS CAPTURE FUNCTIONS!");
+                        Helper.Log.Write(Helper.eLogType.Info, "  (Not testing execution to avoid crashes - library exists and has symbols)");
+                        Helper.Log.Write(Helper.eLogType.Info, "  Next step: Implement safe marshalling to actually call these functions");
                     }
                     else
                     {
-                        Helper.Log.Write(Helper.eLogType.Warning, $"  Result: {result}");
+                        Helper.Log.Write(Helper.eLogType.Debug, "  No capture functions found");
                     }
 
-                    // Test 2: secvideo_api_capture_screen (with UI)
-                    Helper.Log.Write(Helper.eLogType.Info, "  Test 2: secvideo_api_capture_screen() [with UI]");
-                    result = CapiCaptureScreen(1920, 1080, ref testInfo);
-
-                    if (result == 0)
-                    {
-                        Helper.Log.Write(Helper.eLogType.Info, "  ✅✅✅ CAPI CAPTURE SCREEN WORKS! ✅✅✅");
-                        Helper.Log.Write(Helper.eLogType.Info, $"  Captured resolution: {testInfo.iWidth}x{testInfo.iHeight}");
-                        Helper.Log.Write(Helper.eLogType.Info, "  ⭐⭐⭐ USE LIBCAPI-VIDEO-CAPTURE.SO! ⭐⭐⭐");
-                        return;
-                    }
-                    else if (result == -4)
-                    {
-                        Helper.Log.Write(Helper.eLogType.Warning, "  Result: -4 (DRM protected content)");
-                        Helper.Log.Write(Helper.eLogType.Info, "  ⭐ CAPI API works!");
-                        return;
-                    }
-                    else
-                    {
-                        Helper.Log.Write(Helper.eLogType.Warning, $"  Result: {result}");
-                    }
-
-                    Helper.Log.Write(Helper.eLogType.Error, "  ✗ CAPI functions also blocked/failed");
-                    return;
+                    dlclose(handle);
+                    handle = IntPtr.Zero;
                 }
-            }
-            catch (DllNotFoundException)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug, "  Library exists but cannot be loaded");
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Error, $"  Test failed: {ex.Message}");
-            }
-        }
-
-        // Test the libdali-extension-tv-video-canvas.so library (also has T7 functions)
-        [DllImport("/usr/lib/libdali-extension-tv-video-canvas.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen_video_only")]
-        private static extern int DaliCaptureScreenVideo(int w, int h, ref SecVideoCapture.Info_t pInfo);
-
-        [DllImport("/usr/lib/libdali-extension-tv-video-canvas.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen")]
-        private static extern int DaliCaptureScreen(int w, int h, ref SecVideoCapture.Info_t pInfo);
-
-        private static void TestDaliExtensionVideoCanvas()
-        {
-            Helper.Log.Write(Helper.eLogType.Info, "Testing libdali-extension-tv-video-canvas.so.0.1.0...");
-
-            try
-            {
-                // Allocate test buffers
-                int bufferSize = 0x7e900; // 518,400 bytes
-                byte[] yBuffer = new byte[bufferSize];
-                byte[] uvBuffer = new byte[bufferSize];
-
-                fixed (byte* pY = yBuffer, pUV = uvBuffer)
+                catch (Exception ex)
                 {
-                    SecVideoCapture.Info_t testInfo = new SecVideoCapture.Info_t();
-                    testInfo.pImageY = (IntPtr)pY;
-                    testInfo.pImageUV = (IntPtr)pUV;
-                    testInfo.iGivenBufferSize1 = bufferSize;
-                    testInfo.iGivenBufferSize2 = bufferSize;
-
-                    // Test 1: secvideo_api_capture_screen_video_only
-                    Helper.Log.Write(Helper.eLogType.Info, "  Test 1: secvideo_api_capture_screen_video_only()");
-                    int result = DaliCaptureScreenVideo(1920, 1080, ref testInfo);
-
-                    if (result == 0)
-                    {
-                        Helper.Log.Write(Helper.eLogType.Info, "  ✅✅✅ DALI EXTENSION VIDEO CAPTURE WORKS! ✅✅✅");
-                        Helper.Log.Write(Helper.eLogType.Info, $"  Captured resolution: {testInfo.iWidth}x{testInfo.iHeight}");
-                        Helper.Log.Write(Helper.eLogType.Info, $"  Y buffer first 16 bytes: {BitConverter.ToString(yBuffer, 0, 16)}");
-                        Helper.Log.Write(Helper.eLogType.Info, "  ⭐⭐⭐ USE LIBDALI-EXTENSION-TV-VIDEO-CANVAS.SO! ⭐⭐⭐");
-                        return;
-                    }
-                    else if (result == -4)
-                    {
-                        Helper.Log.Write(Helper.eLogType.Warning, "  Result: -4 (DRM protected content)");
-                        Helper.Log.Write(Helper.eLogType.Info, "  ⭐ DALI API works - try on non-DRM content!");
-                        return;
-                    }
-                    else
-                    {
-                        Helper.Log.Write(Helper.eLogType.Warning, $"  Result: {result}");
-                    }
-
-                    // Test 2: secvideo_api_capture_screen (with UI)
-                    Helper.Log.Write(Helper.eLogType.Info, "  Test 2: secvideo_api_capture_screen() [with UI]");
-                    result = DaliCaptureScreen(1920, 1080, ref testInfo);
-
-                    if (result == 0)
-                    {
-                        Helper.Log.Write(Helper.eLogType.Info, "  ✅✅✅ DALI CAPTURE SCREEN WORKS! ✅✅✅");
-                        Helper.Log.Write(Helper.eLogType.Info, $"  Captured resolution: {testInfo.iWidth}x{testInfo.iHeight}");
-                        Helper.Log.Write(Helper.eLogType.Info, "  ⭐⭐⭐ USE LIBDALI-EXTENSION-TV-VIDEO-CANVAS.SO! ⭐⭐⭐");
-                        return;
-                    }
-                    else if (result == -4)
-                    {
-                        Helper.Log.Write(Helper.eLogType.Warning, "  Result: -4 (DRM protected content)");
-                        Helper.Log.Write(Helper.eLogType.Info, "  ⭐ DALI API works!");
-                        return;
-                    }
-                    else
-                    {
-                        Helper.Log.Write(Helper.eLogType.Warning, $"  Result: {result}");
-                    }
-
-                    Helper.Log.Write(Helper.eLogType.Error, "  ✗ Dali extension functions also blocked/failed");
-                    return;
+                    Helper.Log.Write(Helper.eLogType.Error, $"  Error testing {libPath}: {ex.Message}");
                 }
-            }
-            catch (DllNotFoundException)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug, "  Library not found or cannot be loaded");
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Error, $"  Test failed: {ex.Message}");
+                finally
+                {
+                    if (handle != IntPtr.Zero)
+                    {
+                        try { dlclose(handle); } catch { }
+                    }
+                }
             }
         }
     }
