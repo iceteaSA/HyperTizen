@@ -197,33 +197,15 @@ namespace HyperTizen.SDK
 
         private static void SearchForLibraries()
         {
-            Helper.Log.Write(Helper.eLogType.Info, "=== System-wide Library Search ===");
+            Helper.Log.Write(Helper.eLogType.Info, "=== Quick Library Search ===");
 
-            // Comprehensive search across entire filesystem
-            string[] searchCommands = new string[] {
-                // Search standard library paths
-                "find /usr/lib -name '*video*capture*' 2>/dev/null",
-                "find /usr/lib64 -name '*video*capture*' 2>/dev/null",
-                "find /opt/usr/lib -name '*video*capture*' 2>/dev/null",
-                "find /lib -name '*video*capture*' 2>/dev/null",
-                "find /lib64 -name '*video*capture*' 2>/dev/null",
-
-                // Search vendor/system paths (Samsung specific)
-                "find /usr/vendor -name '*video*capture*' 2>/dev/null",
-                "find /vendor -name '*video*capture*' 2>/dev/null",
-                "find /system/lib -name '*video*capture*' 2>/dev/null",
-
-                // Search entire opt tree
-                "find /opt -name '*video*capture*' 2>/dev/null",
-
-                // System-wide search as fallback (timeout after 5 seconds)
-                "timeout 5 find / -name '*video*capture*' -o -name '*IVideoCapture*' 2>/dev/null | head -20",
-
-                // Check system linker cache
-                "ldconfig -p | grep -i video | grep -i capture"
+            // Keep it simple - only check the most likely locations
+            string[] quickSearches = new string[] {
+                "ls -lh /usr/lib/*video*capture*.so* 2>/dev/null | head -10",
+                "ls -lh /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null"
             };
 
-            foreach (string cmd in searchCommands)
+            foreach (string cmd in quickSearches)
             {
                 try
                 {
@@ -235,122 +217,34 @@ namespace HyperTizen.SDK
                     process.StartInfo.UseShellExecute = false;
                     process.Start();
 
-                    string output = process.StandardOutput.ReadToEnd();
-                    process.WaitForExit(2000);
-
-                    if (!string.IsNullOrWhiteSpace(output))
+                    // Short timeout to prevent hanging
+                    if (process.WaitForExit(1000))
                     {
-                        Helper.Log.Write(Helper.eLogType.Info, $"  Results from: {cmd}");
-                        foreach (string line in output.Split('\n'))
+                        string output = process.StandardOutput.ReadToEnd();
+                        if (!string.IsNullOrWhiteSpace(output))
                         {
-                            if (!string.IsNullOrWhiteSpace(line))
+                            foreach (string line in output.Split('\n'))
                             {
-                                Helper.Log.Write(Helper.eLogType.Info, $"    {line.Trim()}");
+                                if (!string.IsNullOrWhiteSpace(line))
+                                {
+                                    Helper.Log.Write(Helper.eLogType.Info, $"  {line.Trim()}");
+                                }
                             }
                         }
+                    }
+                    else
+                    {
+                        process.Kill();
+                        Helper.Log.Write(Helper.eLogType.Debug, "  Search timed out, skipping");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Helper.Log.Write(Helper.eLogType.Debug, $"  Search command failed: {ex.Message}");
+                    Helper.Log.Write(Helper.eLogType.Debug, $"  Search failed: {ex.Message}");
                 }
             }
 
-            // Check loaded libraries in current process
-            try
-            {
-                Helper.Log.Write(Helper.eLogType.Info, "  Currently loaded libraries (video-capture):");
-                var process = new System.Diagnostics.Process();
-                process.StartInfo.FileName = "/bin/sh";
-                process.StartInfo.Arguments = $"-c \"cat /proc/{System.Diagnostics.Process.GetCurrentProcess().Id}/maps | grep -i video\"";
-                process.StartInfo.RedirectStandardOutput = true;
-                process.StartInfo.UseShellExecute = false;
-                process.Start();
-
-                string output = process.StandardOutput.ReadToEnd();
-                process.WaitForExit(1000);
-
-                if (!string.IsNullOrWhiteSpace(output))
-                {
-                    foreach (string line in output.Split('\n'))
-                    {
-                        if (!string.IsNullOrWhiteSpace(line))
-                        {
-                            Helper.Log.Write(Helper.eLogType.Info, $"    {line.Trim()}");
-                        }
-                    }
-                }
-                else
-                {
-                    Helper.Log.Write(Helper.eLogType.Info, "    (none loaded yet)");
-                }
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug, $"  Failed to check loaded libs: {ex.Message}");
-            }
-
-            // Additional diagnostic: Find all .so files with 'video' in the name
-            try
-            {
-                Helper.Log.Write(Helper.eLogType.Info, "  All 'video' related .so files in /usr/lib:");
-                var process = new System.Diagnostics.Process();
-                process.StartInfo.FileName = "/bin/sh";
-                process.StartInfo.Arguments = "-c \"ls -lh /usr/lib/*video*.so* 2>/dev/null | head -30\"";
-                process.StartInfo.RedirectStandardOutput = true;
-                process.StartInfo.UseShellExecute = false;
-                process.Start();
-
-                string output = process.StandardOutput.ReadToEnd();
-                process.WaitForExit(2000);
-
-                if (!string.IsNullOrWhiteSpace(output))
-                {
-                    foreach (string line in output.Split('\n'))
-                    {
-                        if (!string.IsNullOrWhiteSpace(line))
-                        {
-                            Helper.Log.Write(Helper.eLogType.Info, $"    {line.Trim()}");
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug, $"  Failed to list video libs: {ex.Message}");
-            }
-
-            // Check library dependencies
-            try
-            {
-                Helper.Log.Write(Helper.eLogType.Info, "  Checking libvideo-capture.so.0.1.0 dependencies:");
-                var process = new System.Diagnostics.Process();
-                process.StartInfo.FileName = "/bin/sh";
-                process.StartInfo.Arguments = "-c \"ldd /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null\"";
-                process.StartInfo.RedirectStandardOutput = true;
-                process.StartInfo.UseShellExecute = false;
-                process.Start();
-
-                string output = process.StandardOutput.ReadToEnd();
-                process.WaitForExit(2000);
-
-                if (!string.IsNullOrWhiteSpace(output))
-                {
-                    foreach (string line in output.Split('\n'))
-                    {
-                        if (!string.IsNullOrWhiteSpace(line))
-                        {
-                            Helper.Log.Write(Helper.eLogType.Info, $"    {line.Trim()}");
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug, $"  Failed to check dependencies: {ex.Message}");
-            }
-
-            Helper.Log.Write(Helper.eLogType.Info, "=== End System Search ===");
+            Helper.Log.Write(Helper.eLogType.Info, "=== End Quick Search ===");
         }
 
         private static IVideoCapture* TryGetInstance()
@@ -403,8 +297,15 @@ namespace HyperTizen.SDK
                 return;
             }
 
-            // First: System-wide search for libraries
-            SearchForLibraries();
+            // First: Quick library search (safe, won't crash)
+            try
+            {
+                SearchForLibraries();
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Warning, $"Library search failed: {ex.Message}");
+            }
 
             // Second: Check specific paths
             Helper.Log.Write(Helper.eLogType.Info, "=== T8 SDK Library Discovery ===");
@@ -461,45 +362,59 @@ namespace HyperTizen.SDK
             Helper.Log.Write(Helper.eLogType.Info, "=== End Library Discovery ===");
 
             // Probe the main library (libvideo-capture.so.0.1.0) for exported functions
-            Helper.Log.Write(Helper.eLogType.Info, "=== Probing libvideo-capture.so.0.1.0 for exported functions ===");
-            IntPtr mainHandle = dlopen("/usr/lib/libvideo-capture.so.0.1.0", RTLD_NOW | RTLD_GLOBAL);
-            if (mainHandle == IntPtr.Zero)
+            try
             {
-                string error = dlerror();
-                Helper.Log.Write(Helper.eLogType.Error, $"  ✗ Cannot load libvideo-capture.so.0.1.0: {error}");
-            }
-            else
-            {
-                Helper.Log.Write(Helper.eLogType.Info, "  ✓ libvideo-capture.so.0.1.0 loaded successfully!");
-
-                // Check for exported functions (based on dev's info: these should be in the main library)
-                string[] functionsToCheck = new string[] {
-                    "getVideoMainYUV",
-                    "getVideoPostYUV",
-                    "Lock",
-                    "Unlock",
-                    "getInstance",
-                    "_Z11getInstancev",
-                    "_ZN13IVideoCapture11getInstanceEv"
-                };
-
-                foreach (string func in functionsToCheck)
+                Helper.Log.Write(Helper.eLogType.Info, "=== Probing libvideo-capture.so.0.1.0 for exported functions ===");
+                IntPtr mainHandle = dlopen("/usr/lib/libvideo-capture.so.0.1.0", RTLD_NOW | RTLD_GLOBAL);
+                if (mainHandle == IntPtr.Zero)
                 {
-                    IntPtr funcPtr = dlsym(mainHandle, func);
-                    if (funcPtr != IntPtr.Zero)
-                    {
-                        Helper.Log.Write(Helper.eLogType.Info, $"    ✓ {func}: FOUND at 0x{funcPtr.ToInt64():X}");
-                    }
-                    else
-                    {
-                        Helper.Log.Write(Helper.eLogType.Debug, $"    ✗ {func}: NOT FOUND");
-                    }
+                    string error = dlerror();
+                    Helper.Log.Write(Helper.eLogType.Warning, $"  ✗ Cannot load with dlopen: {error}");
                 }
+                else
+                {
+                    Helper.Log.Write(Helper.eLogType.Info, "  ✓ Loaded successfully with dlopen!");
 
-                // Don't close the handle yet - we might need it for getInstance
-                // dlclose(mainHandle);
+                    // Check for exported functions
+                    string[] functionsToCheck = new string[] {
+                        "getVideoMainYUV",
+                        "getVideoPostYUV",
+                        "Lock",
+                        "Unlock",
+                        "getInstance",
+                        "_Z11getInstancev",
+                        "_ZN13IVideoCapture11getInstanceEv"
+                    };
+
+                    foreach (string func in functionsToCheck)
+                    {
+                        try
+                        {
+                            IntPtr funcPtr = dlsym(mainHandle, func);
+                            if (funcPtr != IntPtr.Zero)
+                            {
+                                Helper.Log.Write(Helper.eLogType.Info, $"    ✓ {func}: FOUND at 0x{funcPtr.ToInt64():X}");
+                            }
+                            else
+                            {
+                                Helper.Log.Write(Helper.eLogType.Debug, $"    ✗ {func}: NOT FOUND");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Debug, $"    ✗ {func}: dlsym failed - {ex.Message}");
+                        }
+                    }
+
+                    // Don't close the handle yet - we might need it for getInstance
+                    // dlclose(mainHandle);
+                }
+                Helper.Log.Write(Helper.eLogType.Info, "=== End Probing ===");
             }
-            Helper.Log.Write(Helper.eLogType.Info, "=== End Probing ===");
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Warning, $"Symbol probing failed: {ex.Message}");
+            }
 
             // Check if main library file exists
             if (!System.IO.File.Exists("/usr/lib/libvideo-capture.so.0.1.0"))
