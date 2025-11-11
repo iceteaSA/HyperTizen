@@ -819,20 +819,7 @@ namespace HyperTizen.SDK
         {
             try
             {
-                // Step 1: Call lock function (vtable[13])
-                // Note: Reference code (GetCaptureFromTZ.c:57) does NOT check Lock return value
-                Helper.Log.Write(Helper.eLogType.Debug, "T8 SDK: Calling lock function...");
-                int lockResult = lockFunc(instance, 1, 0);
-                if (lockResult != 0)
-                {
-                    Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: Lock returned code {lockResult} (continuing anyway, reference code doesn't check this)");
-                }
-                else
-                {
-                    Helper.Log.Write(Helper.eLogType.Debug, "T8 SDK: Lock returned 0 (success)");
-                }
-
-                // Step 2: Prepare input and output parameters
+                // Step 1: Prepare input and output parameters FIRST
                 InputParams input = new InputParams();
                 OutputParams output = new OutputParams();
 
@@ -852,18 +839,39 @@ namespace HyperTizen.SDK
                 input.pYBuffer = pInfo.pImageY;
                 input.pUVBuffer = pInfo.pImageUV;
 
-                // Output is zeroed by default (fixed array)
+                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Input params - bufSize1=0x{input.bufferSize1:X}, bufSize2=0x{input.bufferSize2:X}");
+                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Input params - field2=0x{input.field2:X}, field3=0x{input.field3:X}, field4={input.field4}");
+                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Input params - pY=0x{input.pYBuffer.ToInt64():X}, pUV=0x{input.pUVBuffer.ToInt64():X}");
+                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Instance pointer=0x{((IntPtr)instance).ToInt64():X}");
 
-                // Step 3: Call getVideoMainYUV (vtable[3])
-                Helper.Log.Write(Helper.eLogType.Debug, "T8 SDK: Calling getVideoMainYUV...");
+                // Step 2: Try WITHOUT Lock first (simpler test)
+                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Attempting capture WITHOUT Lock/Unlock...");
                 int captureResult = getVideoMainYUV(instance, &input, &output);
+                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: getVideoMainYUV returned: {captureResult}");
 
-                // Step 4: Call unlock function (vtable[14])
-                Helper.Log.Write(Helper.eLogType.Debug, "T8 SDK: Calling unlock function...");
-                int unlockResult = unlockFunc(instance, 1, 0);
-                if (unlockResult != 0)
+                if (captureResult == 0 || captureResult == 4)
                 {
-                    Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: Unlock returned code {unlockResult}");
+                    Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: getVideoMainYUV succeeded WITHOUT Lock!");
+                }
+                else
+                {
+                    // If no-lock fails, try WITH lock
+                    Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: No-lock capture failed ({captureResult}), trying WITH Lock...");
+
+                    // Reset output
+                    output = new OutputParams();
+
+                    Helper.Log.Write(Helper.eLogType.Debug, "T8 SDK: Calling lock function...");
+                    int lockResult = lockFunc(instance, 1, 0);
+                    Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Lock returned: {lockResult}");
+
+                    Helper.Log.Write(Helper.eLogType.Debug, "T8 SDK: Calling getVideoMainYUV...");
+                    captureResult = getVideoMainYUV(instance, &input, &output);
+                    Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: getVideoMainYUV returned: {captureResult}");
+
+                    Helper.Log.Write(Helper.eLogType.Debug, "T8 SDK: Calling unlock function...");
+                    int unlockResult = unlockFunc(instance, 1, 0);
+                    Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Unlock returned: {unlockResult}");
                 }
 
                 if (captureResult != 0 && captureResult != 4 && captureResult != -4)
