@@ -374,15 +374,10 @@ namespace HyperTizen.SDK
                 return;
             }
 
-            // First: Comprehensive library search with refined, lighter commands
-            try
-            {
-                SearchForLibraries();
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Warning, $"Library search failed: {ex.Message}");
-            }
+            // Library search removed - was causing app crashes due to process spawning
+            // Using known library paths from previous successful runs
+            Helper.Log.Write(Helper.eLogType.Info, "Skipping library search - using known library paths");
+            Helper.Log.Write(Helper.eLogType.Info, "Known: /usr/lib/libvideo-capture.so.0.1.0 exists");
 
             // Probe the main library (libvideo-capture.so.0.1.0) for exported functions
             try
