@@ -199,12 +199,28 @@ namespace HyperTizen.SDK
         {
             Helper.Log.Write(Helper.eLogType.Info, "=== System-wide Library Search ===");
 
-            // Search common locations for video-capture libraries
+            // Comprehensive search across entire filesystem
             string[] searchCommands = new string[] {
-                "find /usr/lib -name '*video-capture*' 2>/dev/null",
-                "find /opt/usr/lib -name '*video-capture*' 2>/dev/null",
-                "find /lib -name '*video-capture*' 2>/dev/null",
-                "ldconfig -p | grep video-capture"
+                // Search standard library paths
+                "find /usr/lib -name '*video*capture*' 2>/dev/null",
+                "find /usr/lib64 -name '*video*capture*' 2>/dev/null",
+                "find /opt/usr/lib -name '*video*capture*' 2>/dev/null",
+                "find /lib -name '*video*capture*' 2>/dev/null",
+                "find /lib64 -name '*video*capture*' 2>/dev/null",
+
+                // Search vendor/system paths (Samsung specific)
+                "find /usr/vendor -name '*video*capture*' 2>/dev/null",
+                "find /vendor -name '*video*capture*' 2>/dev/null",
+                "find /system/lib -name '*video*capture*' 2>/dev/null",
+
+                // Search entire opt tree
+                "find /opt -name '*video*capture*' 2>/dev/null",
+
+                // System-wide search as fallback (timeout after 5 seconds)
+                "timeout 5 find / -name '*video*capture*' -o -name '*IVideoCapture*' 2>/dev/null | head -20",
+
+                // Check system linker cache
+                "ldconfig -p | grep -i video | grep -i capture"
             };
 
             foreach (string cmd in searchCommands)
@@ -243,10 +259,10 @@ namespace HyperTizen.SDK
             // Check loaded libraries in current process
             try
             {
-                Helper.Log.Write(Helper.eLogType.Info, "  Currently loaded libraries:");
+                Helper.Log.Write(Helper.eLogType.Info, "  Currently loaded libraries (video-capture):");
                 var process = new System.Diagnostics.Process();
                 process.StartInfo.FileName = "/bin/sh";
-                process.StartInfo.Arguments = $"-c \"cat /proc/{System.Diagnostics.Process.GetCurrentProcess().Id}/maps | grep video-capture\"";
+                process.StartInfo.Arguments = $"-c \"cat /proc/{System.Diagnostics.Process.GetCurrentProcess().Id}/maps | grep -i video\"";
                 process.StartInfo.RedirectStandardOutput = true;
                 process.StartInfo.UseShellExecute = false;
                 process.Start();
@@ -272,6 +288,66 @@ namespace HyperTizen.SDK
             catch (Exception ex)
             {
                 Helper.Log.Write(Helper.eLogType.Debug, $"  Failed to check loaded libs: {ex.Message}");
+            }
+
+            // Additional diagnostic: Find all .so files with 'video' in the name
+            try
+            {
+                Helper.Log.Write(Helper.eLogType.Info, "  All 'video' related .so files in /usr/lib:");
+                var process = new System.Diagnostics.Process();
+                process.StartInfo.FileName = "/bin/sh";
+                process.StartInfo.Arguments = "-c \"ls -lh /usr/lib/*video*.so* 2>/dev/null | head -30\"";
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.UseShellExecute = false;
+                process.Start();
+
+                string output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit(2000);
+
+                if (!string.IsNullOrWhiteSpace(output))
+                {
+                    foreach (string line in output.Split('\n'))
+                    {
+                        if (!string.IsNullOrWhiteSpace(line))
+                        {
+                            Helper.Log.Write(Helper.eLogType.Info, $"    {line.Trim()}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Debug, $"  Failed to list video libs: {ex.Message}");
+            }
+
+            // Check library dependencies
+            try
+            {
+                Helper.Log.Write(Helper.eLogType.Info, "  Checking libvideo-capture.so.0.1.0 dependencies:");
+                var process = new System.Diagnostics.Process();
+                process.StartInfo.FileName = "/bin/sh";
+                process.StartInfo.Arguments = "-c \"ldd /usr/lib/libvideo-capture.so.0.1.0 2>/dev/null\"";
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.UseShellExecute = false;
+                process.Start();
+
+                string output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit(2000);
+
+                if (!string.IsNullOrWhiteSpace(output))
+                {
+                    foreach (string line in output.Split('\n'))
+                    {
+                        if (!string.IsNullOrWhiteSpace(line))
+                        {
+                            Helper.Log.Write(Helper.eLogType.Info, $"    {line.Trim()}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Debug, $"  Failed to check dependencies: {ex.Message}");
             }
 
             Helper.Log.Write(Helper.eLogType.Info, "=== End System Search ===");
