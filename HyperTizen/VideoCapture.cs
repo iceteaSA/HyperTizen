@@ -245,9 +245,9 @@ namespace HyperTizen
                     try
                     {
                         SDK.VideoEnhanceCapture.Color[] tempColors;
-                        bool result = SDK.VideoEnhanceCapture.CapturePixels(_capturePoints, out tempColors);
+                        bool captureResult = SDK.VideoEnhanceCapture.CapturePixels(_capturePoints, out tempColors);
                         colors = tempColors;
-                        return result;
+                        return captureResult;
                     }
                     catch (Exception ex)
                     {
