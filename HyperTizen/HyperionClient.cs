@@ -4,6 +4,7 @@ using Tizen.Applications;
 using System.Net.WebSockets;
 using System.Text;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Runtime.InteropServices;
 using SkiaSharp;
