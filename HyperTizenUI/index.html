@@ -40,22 +40,40 @@
                         <button class="btn btn-stop" id="btnStop" tabindex="2">
                             ⏹ Stop Capture
                         </button>
-                        <button class="btn btn-restart" id="btnRestart" tabindex="3">
+                        <button class="btn btn-pause" id="btnPause" tabindex="3">
+                            ⏸ Pause
+                        </button>
+                        <button class="btn btn-resume" id="btnResume" tabindex="4">
+                            ▶️ Resume
+                        </button>
+                        <button class="btn btn-restart" id="btnRestart" tabindex="5">
                             🔄 Restart Service
                         </button>
                     </div>
                     <div class="service-status">
                         <div class="status-row">
-                            <span class="label">Service:</span>
-                            <span id="serviceStatus" class="value">Unknown</span>
-                        </div>
-                        <div class="status-row">
-                            <span class="label">Capture:</span>
-                            <span id="captureState" class="value">Stopped</span>
+                            <span class="label">State:</span>
+                            <span id="serviceState" class="value">Unknown</span>
                         </div>
                         <div class="status-row">
                             <span class="label">Connection:</span>
                             <span id="connectionStatus" class="value">Disconnected</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="label">Frames:</span>
+                            <span id="framesCaptured" class="value">0</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="label">Avg FPS:</span>
+                            <span id="averageFPS" class="value">0.0</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="label">Uptime:</span>
+                            <span id="uptime" class="value">00:00:00</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="label">Errors:</span>
+                            <span id="errorCount" class="value">0</span>
                         </div>
                     </div>
                 </div>
@@ -72,10 +90,10 @@
                         </div>
                     </div>
                     <div class="ssdp-actions">
-                        <button class="btn btn-small" id="btnRescan" tabindex="4">
+                        <button class="btn btn-small" id="btnRescan" tabindex="6">
                             🔍 Rescan
                         </button>
-                        <button class="btn btn-small btn-primary" id="btnApplyDevices" tabindex="5">
+                        <button class="btn btn-small btn-primary" id="btnApplyDevices" tabindex="7">
                             ✓ Apply Selection
                         </button>
                     </div>
@@ -92,7 +110,7 @@
                                 <input type="checkbox" id="autoScroll" checked>
                                 <span>Auto-scroll</span>
                             </label>
-                            <button class="btn btn-small" id="btnClearLogs" tabindex="6">
+                            <button class="btn btn-small" id="btnClearLogs" tabindex="8">
                                 🗑 Clear
                             </button>
                         </div>

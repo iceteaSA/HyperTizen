@@ -139,6 +139,47 @@ namespace HyperTizen.WebSocket
                             await SetConfiguration(setConfigEvent);
                             break;
                         }
+
+                    case Event.PauseCapture:
+                        {
+                            Helper.Log.Write(Helper.eLogType.Info, "Pause capture requested via WebSocket");
+                            App.client.Pause();
+                            await BroadcastStatusUpdate("paused", "Capture paused");
+                            break;
+                        }
+
+                    case Event.ResumeCapture:
+                        {
+                            Helper.Log.Write(Helper.eLogType.Info, "Resume capture requested via WebSocket");
+                            App.client.Resume();
+                            await BroadcastStatusUpdate("capturing", "Capture resumed");
+                            break;
+                        }
+
+                    case Event.GetStatus:
+                        {
+                            Helper.Log.Write(Helper.eLogType.Info, "Status requested via WebSocket");
+                            var status = App.client.GetStatus();
+
+                            string uptime = "N/A";
+                            if (status.StartTime != default(DateTime))
+                            {
+                                var elapsed = DateTime.Now - status.StartTime;
+                                uptime = $"{elapsed.Hours:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
+                            }
+
+                            string resultEvent = JsonConvert.SerializeObject(new StatusResultEvent(
+                                status.State.ToString(),
+                                status.FramesCaptured,
+                                Math.Round(status.AverageFPS, 2),
+                                status.ErrorCount,
+                                status.IsConnected,
+                                status.LastError ?? "None",
+                                uptime
+                            ));
+                            await SendAsync(webSocket, resultEvent);
+                            break;
+                        }
                 }
             }
             catch (JsonException jsonEx)
@@ -271,7 +312,7 @@ namespace HyperTizen.WebSocket
                             else
                             {
                                 Helper.Log.Write(Helper.eLogType.Info, "Stopping screen capture");
-                                // TODO: Implement proper Stop() method in HyperionClient
+                                await App.client.Stop();
                             }
 
                             // Broadcast status update with error handling

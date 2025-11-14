@@ -20,7 +20,11 @@ const Events = {
     SSDPScanResult: 4,
     GetLogs: 5,
     LogsResult: 6,
-    StatusUpdate: 7
+    StatusUpdate: 7,
+    PauseCapture: 8,
+    ResumeCapture: 9,
+    GetStatus: 10,
+    StatusResult: 11
 };
 
 // Initialize the application
@@ -39,6 +43,9 @@ window.initializeApp = function(ip) {
 
     // Start periodic SSDP scanning
     startPeriodicSSDPScan();
+
+    // Start periodic status updates
+    startPeriodicStatusUpdate();
 };
 
 // ============================================================================
@@ -170,6 +177,10 @@ function handleControlMessage(data) {
             handleLogsResult(data);
             break;
 
+        case Events.StatusResult:
+            handleStatusResult(data);
+            break;
+
         default:
             console.log('Unknown event type:', data.Event, data);
     }
@@ -275,9 +286,44 @@ function handleStatusUpdate(data) {
     if (data.status === 'capturing') {
         setRainbowBorder(true);
         updateCaptureState(true);
+        updateStatus('serviceState', 'Capturing');
     } else if (data.status === 'stopped') {
         setRainbowBorder(false);
         updateCaptureState(false);
+        updateStatus('serviceState', 'Stopped');
+    } else if (data.status === 'paused') {
+        setRainbowBorder(false);
+        updateCaptureState(false);
+        updateStatus('serviceState', 'Paused');
+    }
+}
+
+function handleStatusResult(data) {
+    addLog('Info', `Status received: ${data.state}, Frames: ${data.framesCaptured}, FPS: ${data.averageFPS}`);
+
+    // Update all status fields
+    updateStatus('serviceState', data.state);
+    updateStatus('framesCaptured', data.framesCaptured.toLocaleString());
+    updateStatus('averageFPS', data.averageFPS.toFixed(1));
+    updateStatus('errorCount', data.errorCount.toString());
+    updateStatus('uptime', data.uptime);
+    updateStatus('connectionStatus', data.isConnected ? 'Connected' : 'Disconnected');
+
+    // Update capture state based on service state
+    if (data.state === 'Capturing') {
+        setRainbowBorder(true);
+        updateCaptureState(true);
+    } else if (data.state === 'Paused') {
+        setRainbowBorder(false);
+        updateCaptureState(false);
+    } else {
+        setRainbowBorder(false);
+        updateCaptureState(false);
+    }
+
+    // Log last error if present
+    if (data.lastError && data.lastError !== 'None') {
+        addLog('Warning', `Last error: ${data.lastError}`);
     }
 }
 
@@ -396,6 +442,20 @@ function restartService() {
 function rescanDevices() {
     addLog('Info', 'Rescanning for SSDP devices...');
     send({ Event: Events.ScanSSDP });
+}
+
+function pauseCapture() {
+    addLog('Info', 'Pausing capture...');
+    send({ Event: Events.PauseCapture });
+}
+
+function resumeCapture() {
+    addLog('Info', 'Resuming capture...');
+    send({ Event: Events.ResumeCapture });
+}
+
+function getStatus() {
+    send({ Event: Events.GetStatus });
 }
 
 // ============================================================================
@@ -523,6 +583,8 @@ function pad(num) {
 function setupButtonHandlers() {
     document.getElementById('btnStart').onclick = startCapture;
     document.getElementById('btnStop').onclick = stopCapture;
+    document.getElementById('btnPause').onclick = pauseCapture;
+    document.getElementById('btnResume').onclick = resumeCapture;
     document.getElementById('btnRestart').onclick = restartService;
     document.getElementById('btnRescan').onclick = rescanDevices;
     document.getElementById('btnApplyDevices').onclick = applyDeviceSelection;
@@ -540,6 +602,15 @@ function startPeriodicSSDPScan() {
             send({ Event: Events.ScanSSDP });
         }
     }, 30000);
+}
+
+function startPeriodicStatusUpdate() {
+    // Request detailed status every 5 seconds
+    setInterval(() => {
+        if (controlWS && controlWS.readyState === WebSocket.OPEN) {
+            getStatus();
+        }
+    }, 5000);
 }
 
 // ============================================================================

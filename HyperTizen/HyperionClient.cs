@@ -20,18 +20,93 @@ using Tizen.Applications.Notifications;
 
 namespace HyperTizen
 {
+    // Service state enum for lifecycle management
+    public enum ServiceState
+    {
+        Idle,           // Not capturing
+        Starting,       // Initializing
+        Capturing,      // Active capture
+        Paused,         // Temporarily suspended
+        Stopping,       // Shutting down
+        Error           // Failed state
+    }
+
+    // Detailed status information
+    public class ServiceStatus
+    {
+        public ServiceState State { get; set; }
+        public long FramesCaptured { get; set; }
+        public double AverageFPS { get; set; }
+        public int ErrorCount { get; set; }
+        public bool IsConnected { get; set; }
+        public string LastError { get; set; }
+        public DateTime StartTime { get; set; }
+    }
 
     internal class HyperionClient
     {
+        // Lifecycle management fields
+        private CancellationTokenSource _cancellationTokenSource;
+        private bool _isRunning = false;
+        private bool _isPaused = false;
+        private readonly object _pauseLock = new object();
+        private ServiceState _serviceState = ServiceState.Idle;
+        private readonly object _stateLock = new object();
+
+        // Capture statistics
+        private long _framesCaptured = 0;
+        private int _errorCount = 0;
+        private string _lastError = null;
+        private DateTime _startTime;
+        private List<double> _fpsHistory = new List<double>();
+
         public HyperionClient()
         {
             Task.Run(() => Start());
+        }
+
+        // Get current service state
+        public ServiceState State
+        {
+            get
+            {
+                lock (_stateLock)
+                {
+                    return _serviceState;
+                }
+            }
+            private set
+            {
+                lock (_stateLock)
+                {
+                    _serviceState = value;
+                }
+            }
         }
 
         public async Task Start()
         {
             try
             {
+                // Prevent multiple simultaneous starts
+                if (_isRunning)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "HyperionClient already running");
+                    return;
+                }
+
+                State = ServiceState.Starting;
+                _isRunning = true;
+                _startTime = DateTime.Now;
+                _framesCaptured = 0;
+                _errorCount = 0;
+                _fpsHistory.Clear();
+
+                // Create new cancellation token source
+                _cancellationTokenSource = new CancellationTokenSource();
+
+                Helper.Log.Write(Helper.eLogType.Info, "HyperionClient starting...");
+
                 // DIAGNOSTIC MODE: Set to true to pause for 10 minutes after initialization
                 const bool DIAGNOSTIC_MODE = true;
 
@@ -184,9 +259,16 @@ namespace HyperTizen
                     };
                     NotificationManager.Post(diagNotif);
 
-                    // Wait for 10 minutes
+                    // Wait for 10 minutes (with cancellation support)
                     for (int i = 10; i > 0; i--)
                     {
+                        // Check for cancellation
+                        if (_cancellationTokenSource.Token.IsCancellationRequested)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Warning, "DIAGNOSTIC MODE: Cancelled by user");
+                            break;
+                        }
+
                         // Get WebSocket diagnostics
                         string wsDiag = Helper.Log.GetWebSocketDiagnostics();
 
@@ -203,7 +285,15 @@ namespace HyperTizen
                         };
                         NotificationManager.Post(countdownNotif);
 
-                        await Task.Delay(60000); // 1 minute
+                        try
+                        {
+                            await Task.Delay(60000, _cancellationTokenSource.Token); // 1 minute
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Info, "DIAGNOSTIC MODE: Cancelled during delay");
+                            break;
+                        }
                     }
 
                     Helper.Log.Write(Helper.eLogType.Warning,
@@ -213,14 +303,37 @@ namespace HyperTizen
                 }
 
                 Helper.Log.Write(Helper.eLogType.Info, "Starting main capture loop...");
+                State = ServiceState.Capturing;
 
                 int consecutiveErrors = 0;
                 const int maxConsecutiveErrors = 10;
 
-                while (Globals.Instance.Enabled)
+                while (!_cancellationTokenSource.Token.IsCancellationRequested && Globals.Instance.Enabled)
                 {
                     try
                     {
+                        // Handle pause state
+                        if (_isPaused)
+                        {
+                            if (State != ServiceState.Paused)
+                            {
+                                State = ServiceState.Paused;
+                                Helper.Log.Write(Helper.eLogType.Info, "Capture loop paused");
+                            }
+
+                            await Task.Delay(100, _cancellationTokenSource.Token);
+                            continue;
+                        }
+                        else
+                        {
+                            // Resume from paused state
+                            if (State == ServiceState.Paused)
+                            {
+                                State = ServiceState.Capturing;
+                                Helper.Log.Write(Helper.eLogType.Info, "Capture loop resumed");
+                            }
+                        }
+
                         if(Networking.client != null && Networking.client.Client.Connected)
                         {
                             var watchFPS = System.Diagnostics.Stopwatch.StartNew();
@@ -228,7 +341,15 @@ namespace HyperTizen
                             watchFPS.Stop();
                             var elapsedFPS = 1 / watchFPS.Elapsed.TotalSeconds;
                             Helper.Log.Write(Helper.eLogType.Performance, "Capture FPS: " + elapsedFPS.ToString("F1"));
-                            
+
+                            // Update statistics
+                            _framesCaptured++;
+                            _fpsHistory.Add(elapsedFPS);
+                            if (_fpsHistory.Count > 100) // Keep last 100 samples
+                            {
+                                _fpsHistory.RemoveAt(0);
+                            }
+
                             // Reset error counter on success
                             consecutiveErrors = 0;
                         }
@@ -236,45 +357,193 @@ namespace HyperTizen
                         {
                             Helper.Log.Write(Helper.eLogType.Info, "Not connected, registering...");
                             await Task.Run(() => Networking.SendRegister());
-                            
+
                             // Add delay between retry attempts to prevent tight loop
                             if (Networking.client == null || !Networking.client.Connected)
                             {
                                 Helper.Log.Write(Helper.eLogType.Warning, "Register failed, retry in 2s");
-                                await Task.Delay(2000);
+                                await Task.Delay(2000, _cancellationTokenSource.Token);
                             }
                         }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, "Capture loop cancelled gracefully");
+                        break;
                     }
                     catch (Exception loopEx)
                     {
                         consecutiveErrors++;
-                        Helper.Log.Write(Helper.eLogType.Error, 
-                            $"LOOP ERROR #{consecutiveErrors}: {loopEx.GetType().Name}: {loopEx.Message}");
-                        
+                        _errorCount++;
+                        _lastError = $"{loopEx.GetType().Name}: {loopEx.Message}";
+                        Helper.Log.Write(Helper.eLogType.Error,
+                            $"LOOP ERROR #{consecutiveErrors}: {_lastError}");
+
                         if (consecutiveErrors >= maxConsecutiveErrors)
                         {
-                            Helper.Log.Write(Helper.eLogType.Error, 
+                            Helper.Log.Write(Helper.eLogType.Error,
                                 $"TOO MANY ERRORS ({consecutiveErrors}). Stopping capture to prevent crash.");
+                            State = ServiceState.Error;
                             Globals.Instance.Enabled = false;
                             break;
                         }
-                        
+
                         // Wait before retrying to prevent tight error loop
-                        await Task.Delay(2000);
+                        try
+                        {
+                            await Task.Delay(2000, _cancellationTokenSource.Token);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Info, "Cancelled during error recovery delay");
+                            break;
+                        }
                     }
                 }
+
+                Helper.Log.Write(Helper.eLogType.Info, "Capture loop exited");
+                State = ServiceState.Idle;
             }
             catch (Exception ex)
             {
-                Helper.Log.Write(Helper.eLogType.Error, 
-                    $"FATAL ERROR in Start(): {ex.GetType().Name}: {ex.Message}\nStack: {ex.StackTrace}");
+                _errorCount++;
+                _lastError = $"FATAL: {ex.GetType().Name}: {ex.Message}";
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"FATAL ERROR in Start(): {_lastError}\nStack: {ex.StackTrace}");
+                State = ServiceState.Error;
             }
-                
+            finally
+            {
+                _isRunning = false;
+                Helper.Log.Write(Helper.eLogType.Info, "HyperionClient Start() method completed");
+            }
         }
 
         public async Task Stop()
         {
+            Helper.Log.Write(Helper.eLogType.Info, "Stopping HyperionClient...");
+            State = ServiceState.Stopping;
 
+            // Set global enabled flag to false
+            Globals.Instance.Enabled = false;
+
+            // Cancel the cancellation token source
+            if (_cancellationTokenSource != null)
+            {
+                try
+                {
+                    _cancellationTokenSource.Cancel();
+                    Helper.Log.Write(Helper.eLogType.Info, "Cancellation token signaled");
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning,
+                        $"Error cancelling token: {ex.Message}");
+                }
+
+                // Wait for graceful shutdown with timeout
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                while (_isRunning && stopwatch.ElapsedMilliseconds < 5000)
+                {
+                    await Task.Delay(100);
+                }
+
+                if (_isRunning)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning,
+                        "Force stopped after timeout - capture loop may still be running");
+                }
+                else
+                {
+                    Helper.Log.Write(Helper.eLogType.Info,
+                        $"Graceful shutdown completed in {stopwatch.ElapsedMilliseconds}ms");
+                }
+
+                // Dispose of cancellation token source
+                try
+                {
+                    _cancellationTokenSource.Dispose();
+                    _cancellationTokenSource = null;
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning,
+                        $"Error disposing cancellation token: {ex.Message}");
+                }
+            }
+
+            // Close network connections
+            if (Networking.client != null && Networking.client.Connected)
+            {
+                try
+                {
+                    Helper.Log.Write(Helper.eLogType.Info, "Closing network connection...");
+                    Networking.DisconnectClient();
+                    Helper.Log.Write(Helper.eLogType.Info, "Network connection closed");
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning,
+                        $"Error closing network connection: {ex.Message}");
+                }
+            }
+
+            State = ServiceState.Idle;
+            Helper.Log.Write(Helper.eLogType.Info, "HyperionClient stopped");
+        }
+
+        public void Pause()
+        {
+            lock (_pauseLock)
+            {
+                if (_isPaused)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "Capture already paused");
+                    return;
+                }
+
+                _isPaused = true;
+                Helper.Log.Write(Helper.eLogType.Info, "Capture paused");
+            }
+        }
+
+        public void Resume()
+        {
+            lock (_pauseLock)
+            {
+                if (!_isPaused)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "Capture not paused");
+                    return;
+                }
+
+                _isPaused = false;
+                Helper.Log.Write(Helper.eLogType.Info, "Capture resumed");
+            }
+        }
+
+        public ServiceStatus GetStatus()
+        {
+            double avgFPS = 0;
+            if (_fpsHistory.Count > 0)
+            {
+                avgFPS = _fpsHistory.Average();
+            }
+
+            bool isConnected = Networking.client != null && Networking.client.Connected;
+
+            var status = new ServiceStatus
+            {
+                State = State,
+                FramesCaptured = _framesCaptured,
+                AverageFPS = avgFPS,
+                ErrorCount = _errorCount,
+                IsConnected = isConnected,
+                LastError = _lastError,
+                StartTime = _startTime
+            };
+
+            return status;
         }
     }
 }
