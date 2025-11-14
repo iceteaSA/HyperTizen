@@ -132,7 +132,7 @@
         <!-- Footer -->
         <div class="footer">
             <div class="footer-info">
-                <span>HyperTizen v1.2.0 | Tizen 8.0+ Fork</span>
+                <span id="versionInfo">HyperTizen UI v... | Tizen 8.0+ Fork</span>
                 <span class="separator">•</span>
                 <span id="wsStatus">WebSocket: Disconnected</span>
             </div>
@@ -143,8 +143,31 @@
     </div>
 
     <script>
+        // Load version from package.json
+        function loadVersion() {
+            fetch('package.json')
+                .then(res => res.json())
+                .then(pkg => {
+                    const versionInfo = document.getElementById('versionInfo');
+                    if (versionInfo) {
+                        versionInfo.textContent = `HyperTizen UI v${pkg.version} | Tizen 8.0+ Fork`;
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to load version from package.json:', err);
+                    // Fallback to hardcoded version
+                    const versionInfo = document.getElementById('versionInfo');
+                    if (versionInfo) {
+                        versionInfo.textContent = 'HyperTizen UI v1.2.0 | Tizen 8.0+ Fork';
+                    }
+                });
+        }
+
         // Initialize the application
         window.onload = function () {
+            // Load version from package.json
+            loadVersion();
+
             // Focus management for remote control
             setupFocusManagement();
 
