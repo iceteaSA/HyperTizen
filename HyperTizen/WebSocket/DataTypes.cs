@@ -11,7 +11,11 @@ namespace HyperTizen.WebSocket.DataTypes
         SSDPScanResult,
         GetLogs,
         LogsResult,
-        StatusUpdate
+        StatusUpdate,
+        PauseCapture,
+        ResumeCapture,
+        GetStatus,
+        StatusResult
     }
 
     public class BasicEvent
@@ -88,6 +92,30 @@ namespace HyperTizen.WebSocket.DataTypes
         }
         public string status { get; set; }
         public string message { get; set; }
+    }
+
+    public class StatusResultEvent : BasicEvent
+    {
+        public StatusResultEvent(string state, long framesCaptured, double averageFPS,
+            int errorCount, bool isConnected, string lastError, string uptime)
+        {
+            this.Event = Event.StatusResult;
+            this.state = state;
+            this.framesCaptured = framesCaptured;
+            this.averageFPS = averageFPS;
+            this.errorCount = errorCount;
+            this.isConnected = isConnected;
+            this.lastError = lastError;
+            this.uptime = uptime;
+        }
+
+        public string state { get; set; }
+        public long framesCaptured { get; set; }
+        public double averageFPS { get; set; }
+        public int errorCount { get; set; }
+        public bool isConnected { get; set; }
+        public string lastError { get; set; }
+        public string uptime { get; set; }
     }
 
     public class ImageCommand
