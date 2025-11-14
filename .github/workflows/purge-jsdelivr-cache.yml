@@ -12,13 +12,8 @@ jobs:
   purge-cache:
     runs-on: ubuntu-latest
     steps:
-      - name: Purge jsDelivr cache
+      - name: Purge jsDelivr cache for entire repository
         uses: gacts/purge-jsdelivr-cache@v1
         with:
           url: |
-            https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/HyperTizenUI/index.html
-            https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/HyperTizenUI/main.css
-            https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/HyperTizenUI/package.json
-            https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/HyperTizenUI/config.xml
-            https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/HyperTizenUI/js/wsClient.js
-            https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/HyperTizenUI/js/service.js
+            https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/*
