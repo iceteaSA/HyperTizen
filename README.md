@@ -121,7 +121,7 @@ Detailed technical documentation for developers:
 - **[CAPTURE_BLOCKED_ANALYSIS.md](./CAPTURE_BLOCKED_ANALYSIS.md)** - Analysis of why official APIs return `-95 EOPNOTSUPP`
 - **[VTABLE_ANALYSIS.md](./VTABLE_ANALYSIS.md)** - Reverse engineering notes on Tizen 8 virtual tables
 - **[WEBSOCKET_LOGS.md](./WEBSOCKET_LOGS.md)** - WebSocket log streaming implementation details
-- **[HANDOFF_FOR_NEXT_CLAUDE.md](./HANDOFF_FOR_NEXT_CLAUDE.md)** - Development notes and next steps
+- **[HANDOFF_FOR_NEXT_CLAUDE.md](./docs/archive/HANDOFF_FOR_NEXT_CLAUDE.md)** - *(ARCHIVED)* Historical development notes
 
 ---
 
