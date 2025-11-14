@@ -13,8 +13,12 @@ namespace HyperTizen
             base.OnCreate();
             if (!Preference.Contains("enabled")) Preference.Set("enabled", "false");
 
-            // Start WebSocket log server on unusual port to avoid conflicts
+            // Start WebSocket log server on port 45678
             Helper.Log.StartWebSocketServer(45678);
+
+            // Start WebSocket control server on port 8086 for UI control
+            Task.Run(() => WebSocket.WebSocketServer.StartServerAsync());
+            Helper.Log.Write(Helper.eLogType.Info, "WebSocket control server starting on port 8086");
 
             // Run diagnostics to check which capture APIs are available
             DiagnosticCapture.RunDiagnostics();
