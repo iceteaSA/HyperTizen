@@ -160,7 +160,41 @@ If you get `install failed[118, -12], reason: Check certificate error` error, yo
 
 4. Install TizenBrew to your TV. Follow [this guide](https://github.com/reisxd/TizenBrew/blob/main/docs/README.md).
 
-5. Add `reisxd/HyperTizen/HyperTizenUI` as a GitHub module to the module manager. You can access the module manager by pressing the [GREEN] button on the remote.
+5. **Install the HyperTizen UI** via TizenBrew's GitHub module manager:
+
+   **Using the Module Manager:**
+   - Press the **[GREEN]** button on your remote to open TizenBrew module manager
+   - Navigate to "Add GitHub Module"
+   - Enter the module path (see formats below)
+
+   **Module Path Formats:**
+
+   - **Install from main branch** (this fork):
+     ```
+     iceteaSA/HyperTizen/HyperTizenUI
+     ```
+
+   - **Install from a specific branch** (this fork):
+     ```
+     iceteaSA/HyperTizen/HyperTizenUI@branch-name
+     ```
+     Example:
+     ```
+     iceteaSA/HyperTizen/HyperTizenUI@claude/fix-pixel-sampling-capture-01GD3EJ6G87ZtCcxz6bkb8yE
+     ```
+
+   - **Install from original repo** (Tizen 7 only):
+     ```
+     reisxd/HyperTizen/HyperTizenUI
+     ```
+
+   **General Format:**
+   ```
+   <username>/<repository>/<folder-path>[@branch-name]
+   ```
+   - `username/repository` - GitHub repository owner and name
+   - `folder-path` - Path to the app folder within the repository
+   - `@branch-name` - (Optional) Specific branch to install from; defaults to `main` if omitted
 
 ### Resigning the Package
 
