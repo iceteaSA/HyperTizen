@@ -231,12 +231,49 @@ namespace HyperTizen
                     _currentMethod = CaptureMethod.PixelSampling;
                 }
 
-                var watchPixel = System.Diagnostics.Stopwatch.StartNew();
-                SDK.VideoEnhanceCapture.Color[] colors;
-                bool pixelSuccess = SDK.VideoEnhanceCapture.CapturePixels(_capturePoints, out colors);
-                watchPixel.Stop();
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"DoCapture: Calling CapturePixels with {_capturePoints.Length} points...");
 
-                if (pixelSuccess)
+                var watchPixel = System.Diagnostics.Stopwatch.StartNew();
+                SDK.VideoEnhanceCapture.Color[] colors = null;
+                bool pixelSuccess = false;
+                bool timedOut = false;
+
+                // Run CapturePixels on a separate task with timeout protection
+                var captureTask = Task.Run(() =>
+                {
+                    try
+                    {
+                        SDK.VideoEnhanceCapture.Color[] tempColors;
+                        bool result = SDK.VideoEnhanceCapture.CapturePixels(_capturePoints, out tempColors);
+                        colors = tempColors;
+                        return result;
+                    }
+                    catch (Exception ex)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Error,
+                            $"DoCapture: CapturePixels exception: {ex.Message}");
+                        return false;
+                    }
+                });
+
+                // Wait up to 5 seconds for capture to complete
+                if (captureTask.Wait(5000))
+                {
+                    pixelSuccess = captureTask.Result;
+                    watchPixel.Stop();
+                    Helper.Log.Write(Helper.eLogType.Debug,
+                        $"DoCapture: CapturePixels returned {pixelSuccess} in {watchPixel.ElapsedMilliseconds}ms");
+                }
+                else
+                {
+                    watchPixel.Stop();
+                    timedOut = true;
+                    Helper.Log.Write(Helper.eLogType.Error,
+                        $"DoCapture: CapturePixels TIMED OUT after {watchPixel.ElapsedMilliseconds}ms!");
+                }
+
+                if (pixelSuccess && !timedOut && colors != null)
                 {
                     Helper.Log.Write(Helper.eLogType.Performance,
                         $"VideoEnhanceCapture: Captured {colors.Length} pixels in {watchPixel.ElapsedMilliseconds}ms");
@@ -266,7 +303,16 @@ namespace HyperTizen
                 }
                 else
                 {
-                    Helper.Log.Write(Helper.eLogType.Error, "DoCapture: VideoEnhanceCapture failed!");
+                    if (timedOut)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Error,
+                            "DoCapture: VideoEnhanceCapture timed out - native library may be blocking!");
+                    }
+                    else
+                    {
+                        Helper.Log.Write(Helper.eLogType.Error,
+                            $"DoCapture: VideoEnhanceCapture failed! (success={pixelSuccess}, colors={(colors == null ? "null" : "valid")})");
+                    }
                 }
             }
 
