@@ -25,6 +25,15 @@ namespace HyperTizen
 
             Display.StateChanged += Display_StateChanged;
             client = new HyperionClient();
+
+            // Show service started notification (always shown)
+            Notification startNotif = new Notification
+            {
+                Title = "HyperTizen Service",
+                Content = "Service started",
+                Count = 1
+            };
+            NotificationManager.Post(startNotif);
         }
 
         private void Display_StateChanged(object sender, DisplayStateChangedEventArgs e)
@@ -70,6 +79,15 @@ namespace HyperTizen
 
         protected override void OnTerminate()
         {
+            // Show service stopped notification (always shown)
+            Notification stopNotif = new Notification
+            {
+                Title = "HyperTizen Service",
+                Content = "Service stopped",
+                Count = 1
+            };
+            NotificationManager.Post(stopNotif);
+
             // Stop WebSocket server
             Helper.Log.StopWebSocketServer();
             base.OnTerminate();

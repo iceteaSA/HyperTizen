@@ -39,13 +39,16 @@ namespace HyperTizen
 
                 Helper.Log.Write(Helper.eLogType.Info, "Tizen 8+ detected - skipping old library diagnostics");
 
-                Notification skipNotif = new Notification
+                if (Globals.Instance.ShowNotifications)
                 {
-                    Title = "Tizen 8+ Detected",
-                    Content = "Skipping old API tests - using new vtable method",
-                    Count = notificationCount++
-                };
-                NotificationManager.Post(skipNotif);
+                    Notification skipNotif = new Notification
+                    {
+                        Title = "Tizen 8+ Detected",
+                        Content = "Skipping old API tests - using new vtable method",
+                        Count = notificationCount++
+                    };
+                    NotificationManager.Post(skipNotif);
+                }
 
                 // On Tizen 8+, we use the new vtable method
                 report += "✓ Using new vtable-based capture API\n";
@@ -67,25 +70,31 @@ namespace HyperTizen
                     report += $"  Screen: {cond.Width}x{cond.Height}, Points: {cond.ScreenCapturePoints}\n";
                     anyWorking = true;
 
-                    Notification n1 = new Notification
+                    if (Globals.Instance.ShowNotifications)
                     {
-                        Title = "✓ T7 API WORKS",
-                        Content = $"libvideoenhance.so T7: {cond.Width}x{cond.Height}, {cond.ScreenCapturePoints} pts",
-                        Count = notificationCount++
-                    };
-                    NotificationManager.Post(n1);
+                        Notification n1 = new Notification
+                        {
+                            Title = "✓ T7 API WORKS",
+                            Content = $"libvideoenhance.so T7: {cond.Width}x{cond.Height}, {cond.ScreenCapturePoints} pts",
+                            Count = notificationCount++
+                        };
+                        NotificationManager.Post(n1);
+                    }
                 }
                 catch (Exception ex)
                 {
                     report += $"✗ libvideoenhance.so T7 API: FAILED ({ex.GetType().Name})\n";
 
-                    Notification n1 = new Notification
+                    if (Globals.Instance.ShowNotifications)
                     {
-                        Title = "✗ T7 API FAILED",
-                        Content = $"libvideoenhance.so T7: {ex.GetType().Name}",
-                        Count = notificationCount++
-                    };
-                    NotificationManager.Post(n1);
+                        Notification n1 = new Notification
+                        {
+                            Title = "✗ T7 API FAILED",
+                            Content = $"libvideoenhance.so T7: {ex.GetType().Name}",
+                            Count = notificationCount++
+                        };
+                        NotificationManager.Post(n1);
+                    }
                 }
 
                 // Test 2: libvideoenhance.so T6 API
@@ -97,25 +106,31 @@ namespace HyperTizen
                     report += $"  Screen: {cond.Width}x{cond.Height}, Points: {cond.ScreenCapturePoints}\n";
                     anyWorking = true;
 
-                    Notification n2 = new Notification
+                    if (Globals.Instance.ShowNotifications)
                     {
-                        Title = "✓ T6 API WORKS",
-                        Content = $"libvideoenhance.so T6: {cond.Width}x{cond.Height}, {cond.ScreenCapturePoints} pts",
-                        Count = notificationCount++
-                    };
-                    NotificationManager.Post(n2);
+                        Notification n2 = new Notification
+                        {
+                            Title = "✓ T6 API WORKS",
+                            Content = $"libvideoenhance.so T6: {cond.Width}x{cond.Height}, {cond.ScreenCapturePoints} pts",
+                            Count = notificationCount++
+                        };
+                        NotificationManager.Post(n2);
+                    }
                 }
                 catch (Exception ex)
                 {
                     report += $"✗ libvideoenhance.so T6 API: FAILED ({ex.GetType().Name})\n";
 
-                    Notification n2 = new Notification
+                    if (Globals.Instance.ShowNotifications)
                     {
-                        Title = "✗ T6 API FAILED",
-                        Content = $"libvideoenhance.so T6: {ex.GetType().Name}",
-                        Count = notificationCount++
-                    };
-                    NotificationManager.Post(n2);
+                        Notification n2 = new Notification
+                        {
+                            Title = "✗ T6 API FAILED",
+                            Content = $"libvideoenhance.so T6: {ex.GetType().Name}",
+                            Count = notificationCount++
+                        };
+                        NotificationManager.Post(n2);
+                    }
                 }
 
                 // Test 3: Alternative library path
@@ -126,25 +141,31 @@ namespace HyperTizen
                     report += $"✓ libvideoenhance.so.0 (alt): WORKING (result={result})\n";
                     anyWorking = true;
 
-                    Notification n4 = new Notification
+                    if (Globals.Instance.ShowNotifications)
                     {
-                        Title = "✓ ALT PATH WORKS",
-                        Content = $"libvideoenhance.so.0: {cond.Width}x{cond.Height}",
-                        Count = notificationCount++
-                    };
-                    NotificationManager.Post(n4);
+                        Notification n4 = new Notification
+                        {
+                            Title = "✓ ALT PATH WORKS",
+                            Content = $"libvideoenhance.so.0: {cond.Width}x{cond.Height}",
+                            Count = notificationCount++
+                        };
+                        NotificationManager.Post(n4);
+                    }
                 }
                 catch (Exception ex)
                 {
                     report += $"✗ libvideoenhance.so.0 (alt): FAILED ({ex.GetType().Name})\n";
 
-                    Notification n4 = new Notification
+                    if (Globals.Instance.ShowNotifications)
                     {
-                        Title = "✗ ALT PATH FAILED",
-                        Content = $"libvideoenhance.so.0: {ex.GetType().Name}",
-                        Count = notificationCount++
-                    };
-                    NotificationManager.Post(n4);
+                        Notification n4 = new Notification
+                        {
+                            Title = "✗ ALT PATH FAILED",
+                            Content = $"libvideoenhance.so.0: {ex.GetType().Name}",
+                            Count = notificationCount++
+                        };
+                        NotificationManager.Post(n4);
+                    }
                 }
             }
 
@@ -156,13 +177,16 @@ namespace HyperTizen
             report += $"Video Recording Support: {SDK.SystemInfo.VideoRecording}\n";
 
             // System info notification
-            Notification sysInfo = new Notification
+            if (Globals.Instance.ShowNotifications)
             {
-                Title = "System Info",
-                Content = $"Tizen {SDK.SystemInfo.TizenVersionMajor}.{SDK.SystemInfo.TizenVersionMinor} | {SDK.SystemInfo.ModelName} | {SDK.SystemInfo.ScreenWidth}x{SDK.SystemInfo.ScreenHeight}",
-                Count = notificationCount++
-            };
-            NotificationManager.Post(sysInfo);
+                Notification sysInfo = new Notification
+                {
+                    Title = "System Info",
+                    Content = $"Tizen {SDK.SystemInfo.TizenVersionMajor}.{SDK.SystemInfo.TizenVersionMinor} | {SDK.SystemInfo.ModelName} | {SDK.SystemInfo.ScreenWidth}x{SDK.SystemInfo.ScreenHeight}",
+                    Count = notificationCount++
+                };
+                NotificationManager.Post(sysInfo);
+            }
 
             report += "\n=== Recommendation ===\n";
             string recommendation = "";
@@ -196,13 +220,16 @@ namespace HyperTizen
             Helper.Log.Write(Helper.eLogType.Info, report);
             
             // Final recommendation notification
-            Notification finalNotif = new Notification
+            if (Globals.Instance.ShowNotifications)
             {
-                Title = anyWorking ? "✓ DIAGNOSTIC COMPLETE" : "✗ DIAGNOSTIC COMPLETE",
-                Content = recommendation,
-                Count = notificationCount++
-            };
-            NotificationManager.Post(finalNotif);
+                Notification finalNotif = new Notification
+                {
+                    Title = anyWorking ? "✓ DIAGNOSTIC COMPLETE" : "✗ DIAGNOSTIC COMPLETE",
+                    Content = recommendation,
+                    Count = notificationCount++
+                };
+                NotificationManager.Post(finalNotif);
+            }
         }
 
         public struct CaptureDiagCondition

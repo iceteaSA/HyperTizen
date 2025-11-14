@@ -64,5 +64,6 @@ namespace HyperTizen
         public int Width; //Capture Width
         public int Height; //Capture Height
         public bool Enabled; //Is the service enabled
+        public bool ShowNotifications = false; //Show notification popups on TV (default: false, use new UI instead)
     }
 }

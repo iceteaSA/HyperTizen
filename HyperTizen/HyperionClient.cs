@@ -252,13 +252,16 @@ namespace HyperTizen
                     }
 
                     // Show notification
-                    Notification diagNotif = new Notification
+                    if (Globals.Instance.ShowNotifications)
                     {
-                        Title = "🔬 DIAGNOSTIC MODE",
-                        Content = "Paused for 10 min - Connect WebSocket to see logs!",
-                        Count = 999
-                    };
-                    NotificationManager.Post(diagNotif);
+                        Notification diagNotif = new Notification
+                        {
+                            Title = "🔬 DIAGNOSTIC MODE",
+                            Content = "Paused for 10 min - Connect WebSocket to see logs!",
+                            Count = 999
+                        };
+                        NotificationManager.Post(diagNotif);
+                    }
 
                     // Wait for 10 minutes (with cancellation support)
                     for (int i = 10; i > 0; i--)
@@ -278,13 +281,16 @@ namespace HyperTizen
                         Helper.Log.Write(Helper.eLogType.Info, wsDiag);
 
                         // Show notification with WebSocket status
-                        Notification countdownNotif = new Notification
+                        if (Globals.Instance.ShowNotifications)
                         {
-                            Title = $"⏱ {i} min remaining",
-                            Content = wsDiag,
-                            Count = 100 + i
-                        };
-                        NotificationManager.Post(countdownNotif);
+                            Notification countdownNotif = new Notification
+                            {
+                                Title = $"⏱ {i} min remaining",
+                                Content = wsDiag,
+                                Count = 100 + i
+                            };
+                            NotificationManager.Post(countdownNotif);
+                        }
 
                         try
                         {
