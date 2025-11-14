@@ -32,22 +32,34 @@ namespace HyperTizen
         {
             try
             {
+                // DIAGNOSTIC MODE: Set to true to pause for 10 minutes after initialization
+                const bool DIAGNOSTIC_MODE = true;
+
                 Globals.Instance.SetConfig();
-                
+
                 // Log the discovered configuration
-                Helper.Log.Write(Helper.eLogType.Info, 
+                Helper.Log.Write(Helper.eLogType.Info,
                     $"Config: {Globals.Instance.ServerIp ?? "null"}:{Globals.Instance.ServerPort}");
-                
-                // Validate configuration before starting loop
-                if (string.IsNullOrEmpty(Globals.Instance.ServerIp) || Globals.Instance.ServerPort <= 0)
+
+                // In diagnostic mode, skip config validation to allow initialization
+                if (!DIAGNOSTIC_MODE)
                 {
-                    Helper.Log.Write(Helper.eLogType.Error, 
-                        "STARTUP FAILED: Invalid config from SSDP");
-                    return;
+                    // Validate configuration before starting loop
+                    if (string.IsNullOrEmpty(Globals.Instance.ServerIp) || Globals.Instance.ServerPort <= 0)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Error,
+                            "STARTUP FAILED: Invalid config from SSDP");
+                        return;
+                    }
+                }
+                else
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning,
+                        "DIAGNOSTIC MODE ACTIVE - Will pause after initialization");
                 }
 
                 Helper.Log.Write(Helper.eLogType.Info, "Initializing VideoCapture...");
-                
+
                 try
                 {
                     VideoCapture.InitCapture();
@@ -55,29 +67,151 @@ namespace HyperTizen
                 }
                 catch (DllNotFoundException dllEx)
                 {
-                    Helper.Log.Write(Helper.eLogType.Error, 
+                    Helper.Log.Write(Helper.eLogType.Error,
                         $"DLL NOT FOUND: {dllEx.Message} - Check Tizen version compatibility");
-                    return;
+
+                    if (DIAGNOSTIC_MODE)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning,
+                            "DIAGNOSTIC MODE: Continuing despite error...");
+                    }
+                    else
+                    {
+                        return;
+                    }
                 }
                 catch (NullReferenceException nullEx)
                 {
-                    Helper.Log.Write(Helper.eLogType.Error, 
+                    Helper.Log.Write(Helper.eLogType.Error,
                         $"NULL POINTER: SecVideoCapture SDK initialization failed - {nullEx.Message}");
-                    return;
+
+                    if (DIAGNOSTIC_MODE)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning,
+                            "DIAGNOSTIC MODE: Continuing despite error...");
+                    }
+                    else
+                    {
+                        return;
+                    }
                 }
                 catch (OutOfMemoryException memEx)
                 {
-                    Helper.Log.Write(Helper.eLogType.Error, 
+                    Helper.Log.Write(Helper.eLogType.Error,
                         $"OUT OF MEMORY: Cannot allocate capture buffers - {memEx.Message}");
-                    return;
+
+                    if (DIAGNOSTIC_MODE)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning,
+                            "DIAGNOSTIC MODE: Continuing despite error...");
+                    }
+                    else
+                    {
+                        return;
+                    }
                 }
                 catch (Exception ex)
                 {
-                    Helper.Log.Write(Helper.eLogType.Error, 
+                    Helper.Log.Write(Helper.eLogType.Error,
                         $"INIT FAILED: {ex.GetType().Name}: {ex.Message}");
+
+                    if (DIAGNOSTIC_MODE)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning,
+                            "DIAGNOSTIC MODE: Continuing despite error...");
+                    }
+                    else
+                    {
+                        return;
+                    }
+                }
+
+                // DIAGNOSTIC MODE: Pause for 10 minutes to allow log inspection
+                if (DIAGNOSTIC_MODE)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning,
+                        "=== DIAGNOSTIC MODE ===");
+                    Helper.Log.Write(Helper.eLogType.Warning,
+                        "Initialization complete. Pausing for 10 minutes...");
+                    Helper.Log.Write(Helper.eLogType.Warning,
+                        "Connect to WebSocket at http://<TV_IP>:45678 to view ALL logs");
+                    Helper.Log.Write(Helper.eLogType.Warning,
+                        "App will stay alive for 10 minutes, then exit gracefully");
+                    Helper.Log.Write(Helper.eLogType.Warning,
+                        "======================");
+
+                    // TEST SCREEN CAPTURE (if Tizen 8+)
+                    if (SDK.SystemInfo.TizenVersionMajor >= 8)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, "");
+                        Helper.Log.Write(Helper.eLogType.Info, "Running screen capture test...");
+                        try
+                        {
+                            bool testPassed = SDK.SecVideoCaptureT8.TestCapture();
+                            if (testPassed)
+                            {
+                                Helper.Log.Write(Helper.eLogType.Info, "🎉 SCREEN CAPTURE TEST PASSED!");
+                            }
+                            else
+                            {
+                                Helper.Log.Write(Helper.eLogType.Warning, "⚠️ Screen capture test did not pass - check logs above");
+                            }
+                        }
+                        catch (Exception testEx)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Error, $"Screen capture test exception: {testEx.Message}");
+                        }
+                        Helper.Log.Write(Helper.eLogType.Info, "");
+
+                        // SCAN FOR ALTERNATIVES - Look for workarounds and alternative libraries
+                        Helper.Log.Write(Helper.eLogType.Info, "Scanning for alternative capture methods...");
+                        try
+                        {
+                            SDK.LibraryScanner.ScanForAlternatives();
+                        }
+                        catch (Exception scanEx)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Error, $"Library scan exception: {scanEx.Message}");
+                        }
+                    }
+
+                    // Show notification
+                    Notification diagNotif = new Notification
+                    {
+                        Title = "🔬 DIAGNOSTIC MODE",
+                        Content = "Paused for 10 min - Connect WebSocket to see logs!",
+                        Count = 999
+                    };
+                    NotificationManager.Post(diagNotif);
+
+                    // Wait for 10 minutes
+                    for (int i = 10; i > 0; i--)
+                    {
+                        // Get WebSocket diagnostics
+                        string wsDiag = Helper.Log.GetWebSocketDiagnostics();
+
+                        Helper.Log.Write(Helper.eLogType.Info,
+                            $"Diagnostic mode: {i} minute(s) remaining...");
+                        Helper.Log.Write(Helper.eLogType.Info, wsDiag);
+
+                        // Show notification with WebSocket status
+                        Notification countdownNotif = new Notification
+                        {
+                            Title = $"⏱ {i} min remaining",
+                            Content = wsDiag,
+                            Count = 100 + i
+                        };
+                        NotificationManager.Post(countdownNotif);
+
+                        await Task.Delay(60000); // 1 minute
+                    }
+
+                    Helper.Log.Write(Helper.eLogType.Warning,
+                        "DIAGNOSTIC MODE: 10 minutes elapsed. Exiting gracefully.");
+                    Globals.Instance.Enabled = false;
                     return;
                 }
-                
+
                 Helper.Log.Write(Helper.eLogType.Info, "Starting main capture loop...");
 
                 int consecutiveErrors = 0;

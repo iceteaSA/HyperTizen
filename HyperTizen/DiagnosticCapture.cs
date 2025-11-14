@@ -27,137 +27,125 @@ namespace HyperTizen
             string report = "=== HyperTizen Capture API Diagnostics ===\n\n";
             bool anyWorking = false;
             int notificationCount = 1;
-            
-            // Test 1: libvideoenhance.so T7 API
-            try
-            {
-                CaptureDiagCondition cond;
-                int result = TestLibVideoEnhanceT7(out cond);
-                report += $"✓ libvideoenhance.so T7 API: WORKING (result={result})\n";
-                report += $"  Screen: {cond.Width}x{cond.Height}, Points: {cond.ScreenCapturePoints}\n";
-                anyWorking = true;
-                
-                Notification n1 = new Notification
-                {
-                    Title = "✓ T7 API WORKS",
-                    Content = $"libvideoenhance.so T7: {cond.Width}x{cond.Height}, {cond.ScreenCapturePoints} pts",
-                    Count = notificationCount++
-                };
-                NotificationManager.Post(n1);
-            }
-            catch (Exception ex)
-            {
-                report += $"✗ libvideoenhance.so T7 API: FAILED ({ex.GetType().Name})\n";
-                
-                Notification n1 = new Notification
-                {
-                    Title = "✗ T7 API FAILED",
-                    Content = $"libvideoenhance.so T7: {ex.GetType().Name}",
-                    Count = notificationCount++
-                };
-                NotificationManager.Post(n1);
-            }
+            int tizenMajor = SDK.SystemInfo.TizenVersionMajor;
 
-            // Test 2: libvideoenhance.so T6 API
-            try
-            {
-                CaptureDiagCondition cond;
-                int result = TestLibVideoEnhanceT6(out cond);
-                report += $"✓ libvideoenhance.so T6 API: WORKING (result={result})\n";
-                report += $"  Screen: {cond.Width}x{cond.Height}, Points: {cond.ScreenCapturePoints}\n";
-                anyWorking = true;
-                
-                Notification n2 = new Notification
-                {
-                    Title = "✓ T6 API WORKS",
-                    Content = $"libvideoenhance.so T6: {cond.Width}x{cond.Height}, {cond.ScreenCapturePoints} pts",
-                    Count = notificationCount++
-                };
-                NotificationManager.Post(n2);
-            }
-            catch (Exception ex)
-            {
-                report += $"✗ libvideoenhance.so T6 API: FAILED ({ex.GetType().Name})\n";
-                
-                Notification n2 = new Notification
-                {
-                    Title = "✗ T6 API FAILED",
-                    Content = $"libvideoenhance.so T6: {ex.GetType().Name}",
-                    Count = notificationCount++
-                };
-                NotificationManager.Post(n2);
-            }
+            report += $"Tizen Version: {tizenMajor}.{SDK.SystemInfo.TizenVersionMinor}\n\n";
 
-            // Test 3: libSecVideoCapture.so T8 SDK
-            try
+            // Skip old library tests on Tizen 8+ (they don't work and cause errors)
+            if (tizenMajor >= 8)
             {
-                IntPtr instance = TestLibSecVideoCaptureT8();
-                if (instance != IntPtr.Zero)
+                report += "⏩ Skipping old API tests (Tizen 8+ detected)\n";
+                report += "   Old APIs (libvideoenhance.so, libSecVideoCapture.so) not available on Tizen 8+\n\n";
+
+                Helper.Log.Write(Helper.eLogType.Info, "Tizen 8+ detected - skipping old library diagnostics");
+
+                Notification skipNotif = new Notification
                 {
-                    report += $"✓ libSecVideoCapture.so T8 SDK: WORKING (instance={instance})\n";
+                    Title = "Tizen 8+ Detected",
+                    Content = "Skipping old API tests - using new vtable method",
+                    Count = notificationCount++
+                };
+                NotificationManager.Post(skipNotif);
+
+                // On Tizen 8+, we use the new vtable method
+                report += "✓ Using new vtable-based capture API\n";
+                report += "  - libvideo-capture.so.0.1.0 getInstance()\n";
+                report += "  - vtable[3]: getVideoMainYUV\n";
+                report += "  - vtable[13]: Lock\n";
+                report += "  - vtable[14]: Unlock\n";
+                anyWorking = true;
+            }
+            else
+            {
+                // Only test old APIs on Tizen 7 and below
+                // Test 1: libvideoenhance.so T7 API
+                try
+                {
+                    CaptureDiagCondition cond;
+                    int result = TestLibVideoEnhanceT7(out cond);
+                    report += $"✓ libvideoenhance.so T7 API: WORKING (result={result})\n";
+                    report += $"  Screen: {cond.Width}x{cond.Height}, Points: {cond.ScreenCapturePoints}\n";
                     anyWorking = true;
-                    
-                    Notification n3 = new Notification
-                    {
-                        Title = "✓ T8 SDK WORKS",
-                        Content = $"libSecVideoCapture.so: instance={instance}",
-                        Count = notificationCount++
-                    };
-                    NotificationManager.Post(n3);
-                }
-                else
-                {
-                    report += $"✗ libSecVideoCapture.so T8 SDK: FAILED (returned NULL)\n";
-                    
-                    Notification n3 = new Notification
-                    {
-                        Title = "✗ T8 SDK FAILED",
-                        Content = "libSecVideoCapture.so: returned NULL",
-                        Count = notificationCount++
-                    };
-                    NotificationManager.Post(n3);
-                }
-            }
-            catch (Exception ex)
-            {
-                report += $"✗ libSecVideoCapture.so T8 SDK: FAILED ({ex.GetType().Name})\n";
-                
-                Notification n3 = new Notification
-                {
-                    Title = "✗ T8 SDK FAILED",
-                    Content = $"libSecVideoCapture.so: {ex.GetType().Name}",
-                    Count = notificationCount++
-                };
-                NotificationManager.Post(n3);
-            }
 
-            // Test 4: Alternative library path
-            try
-            {
-                CaptureDiagCondition cond;
-                int result = TestLibVideoEnhanceAlt(out cond);
-                report += $"✓ libvideoenhance.so.0 (alt): WORKING (result={result})\n";
-                anyWorking = true;
-                
-                Notification n4 = new Notification
+                    Notification n1 = new Notification
+                    {
+                        Title = "✓ T7 API WORKS",
+                        Content = $"libvideoenhance.so T7: {cond.Width}x{cond.Height}, {cond.ScreenCapturePoints} pts",
+                        Count = notificationCount++
+                    };
+                    NotificationManager.Post(n1);
+                }
+                catch (Exception ex)
                 {
-                    Title = "✓ ALT PATH WORKS",
-                    Content = $"libvideoenhance.so.0: {cond.Width}x{cond.Height}",
-                    Count = notificationCount++
-                };
-                NotificationManager.Post(n4);
-            }
-            catch (Exception ex)
-            {
-                report += $"✗ libvideoenhance.so.0 (alt): FAILED ({ex.GetType().Name})\n";
-                
-                Notification n4 = new Notification
+                    report += $"✗ libvideoenhance.so T7 API: FAILED ({ex.GetType().Name})\n";
+
+                    Notification n1 = new Notification
+                    {
+                        Title = "✗ T7 API FAILED",
+                        Content = $"libvideoenhance.so T7: {ex.GetType().Name}",
+                        Count = notificationCount++
+                    };
+                    NotificationManager.Post(n1);
+                }
+
+                // Test 2: libvideoenhance.so T6 API
+                try
                 {
-                    Title = "✗ ALT PATH FAILED",
-                    Content = $"libvideoenhance.so.0: {ex.GetType().Name}",
-                    Count = notificationCount++
-                };
-                NotificationManager.Post(n4);
+                    CaptureDiagCondition cond;
+                    int result = TestLibVideoEnhanceT6(out cond);
+                    report += $"✓ libvideoenhance.so T6 API: WORKING (result={result})\n";
+                    report += $"  Screen: {cond.Width}x{cond.Height}, Points: {cond.ScreenCapturePoints}\n";
+                    anyWorking = true;
+
+                    Notification n2 = new Notification
+                    {
+                        Title = "✓ T6 API WORKS",
+                        Content = $"libvideoenhance.so T6: {cond.Width}x{cond.Height}, {cond.ScreenCapturePoints} pts",
+                        Count = notificationCount++
+                    };
+                    NotificationManager.Post(n2);
+                }
+                catch (Exception ex)
+                {
+                    report += $"✗ libvideoenhance.so T6 API: FAILED ({ex.GetType().Name})\n";
+
+                    Notification n2 = new Notification
+                    {
+                        Title = "✗ T6 API FAILED",
+                        Content = $"libvideoenhance.so T6: {ex.GetType().Name}",
+                        Count = notificationCount++
+                    };
+                    NotificationManager.Post(n2);
+                }
+
+                // Test 3: Alternative library path
+                try
+                {
+                    CaptureDiagCondition cond;
+                    int result = TestLibVideoEnhanceAlt(out cond);
+                    report += $"✓ libvideoenhance.so.0 (alt): WORKING (result={result})\n";
+                    anyWorking = true;
+
+                    Notification n4 = new Notification
+                    {
+                        Title = "✓ ALT PATH WORKS",
+                        Content = $"libvideoenhance.so.0: {cond.Width}x{cond.Height}",
+                        Count = notificationCount++
+                    };
+                    NotificationManager.Post(n4);
+                }
+                catch (Exception ex)
+                {
+                    report += $"✗ libvideoenhance.so.0 (alt): FAILED ({ex.GetType().Name})\n";
+
+                    Notification n4 = new Notification
+                    {
+                        Title = "✗ ALT PATH FAILED",
+                        Content = $"libvideoenhance.so.0: {ex.GetType().Name}",
+                        Count = notificationCount++
+                    };
+                    NotificationManager.Post(n4);
+                }
             }
 
             report += "\n=== System Info ===\n";
@@ -178,7 +166,13 @@ namespace HyperTizen
 
             report += "\n=== Recommendation ===\n";
             string recommendation = "";
-            if (report.Contains("libvideoenhance.so T7 API: WORKING"))
+            if (tizenMajor >= 8)
+            {
+                recommendation = "✓ Tizen 8+ VTable API (getVideoMainYUV)";
+                report += recommendation + "\n";
+                report += "   Check logs for vtable dump and capture results\n";
+            }
+            else if (report.Contains("libvideoenhance.so T7 API: WORKING"))
             {
                 recommendation = "Use ORIGINAL HyperTizen (pixel sampling)";
                 report += recommendation + "\n";
@@ -188,9 +182,9 @@ namespace HyperTizen
                 recommendation = "Use ORIGINAL HyperTizen with T6 API";
                 report += recommendation + "\n";
             }
-            else if (report.Contains("libSecVideoCapture.so T8 SDK: WORKING"))
+            else if (report.Contains("libvideoenhance.so.0 (alt): WORKING"))
             {
-                recommendation = "Use SRYEYES fork (full capture)";
+                recommendation = "Use alternative library path";
                 report += recommendation + "\n";
             }
             else
