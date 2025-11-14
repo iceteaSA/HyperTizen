@@ -342,7 +342,29 @@ namespace HyperTizen
                             }
                         }
 
-                        if(Networking.client != null && Networking.client.Client.Connected)
+                        // THREAD-SAFE NULL CHECKS: Capture client reference to prevent race conditions
+                        var clientSnapshot = Networking.client;
+                        bool isConnected = false;
+
+                        try
+                        {
+                            // Safe connection check with null guards
+                            isConnected = clientSnapshot != null &&
+                                         clientSnapshot.Client != null &&
+                                         clientSnapshot.Client.Connected;
+                        }
+                        catch (NullReferenceException)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Warning, "Connection check: Client became null during check");
+                            isConnected = false;
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Warning, "Connection check: Client was disposed");
+                            isConnected = false;
+                        }
+
+                        if(isConnected)
                         {
                             var watchFPS = System.Diagnostics.Stopwatch.StartNew();
                             await Task.Run(() =>VideoCapture.DoCapture()); //VideoCapture.DoDummyCapture();
@@ -367,7 +389,22 @@ namespace HyperTizen
                             await Task.Run(() => Networking.SendRegister());
 
                             // Add delay between retry attempts to prevent tight loop
-                            if (Networking.client == null || !Networking.client.Connected)
+                            // Re-check connection status after registration attempt
+                            var newClientSnapshot = Networking.client;
+                            bool stillDisconnected = true;
+
+                            try
+                            {
+                                stillDisconnected = newClientSnapshot == null ||
+                                                   newClientSnapshot.Client == null ||
+                                                   !newClientSnapshot.Client.Connected;
+                            }
+                            catch (Exception)
+                            {
+                                stillDisconnected = true;
+                            }
+
+                            if (stillDisconnected)
                             {
                                 Helper.Log.Write(Helper.eLogType.Warning, "Register failed, retry in 2s");
                                 await Task.Delay(2000, _cancellationTokenSource.Token);
