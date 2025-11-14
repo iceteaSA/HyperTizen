@@ -4,78 +4,213 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HyperTizen</title>
+    <title>HyperTizen Control Center</title>
     <link rel="stylesheet" href="main.css">
     <script src="js/wsClient.js"></script>
     <script type="text/javascript" src="$WEBAPIS/webapis/webapis.js"></script>
 </head>
 
 <body>
-    <div class="content">
-        <h1>HyperTizen</h1>
-        <h3 id="status">Status</h3>
-        <a><input type="checkbox" id="enabled"> Enabled</a>
-        <h2 id="ssdpDeviceTitle">SSDP Devices</h2>
-        <div id="ssdpItems"></div>
+    <!-- Rainbow border animation (active when capturing) -->
+    <div id="rainbowBorder" class="rainbow-border"></div>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🚀 HyperTizen Control Center</h1>
+            <div class="status-indicator" id="captureStatus">
+                <div class="indicator-dot"></div>
+                <span id="captureStatusText">Ready</span>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+
+            <!-- Left Column: Service Control & SSDP Devices -->
+            <div class="left-column">
+
+                <!-- Service Control Section -->
+                <div class="section service-control">
+                    <h2>Service Control</h2>
+                    <div class="control-buttons">
+                        <button class="btn btn-start" id="btnStart" tabindex="1">
+                            ▶ Start Capture
+                        </button>
+                        <button class="btn btn-stop" id="btnStop" tabindex="2">
+                            ⏹ Stop Capture
+                        </button>
+                        <button class="btn btn-restart" id="btnRestart" tabindex="3">
+                            🔄 Restart Service
+                        </button>
+                    </div>
+                    <div class="service-status">
+                        <div class="status-row">
+                            <span class="label">Service:</span>
+                            <span id="serviceStatus" class="value">Unknown</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="label">Capture:</span>
+                            <span id="captureState" class="value">Stopped</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="label">Connection:</span>
+                            <span id="connectionStatus" class="value">Disconnected</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SSDP Devices Section -->
+                <div class="section ssdp-devices">
+                    <h2>SSDP Devices</h2>
+                    <div class="ssdp-info">
+                        <span id="ssdpCount">0</span> device(s) found
+                    </div>
+                    <div class="device-list" id="deviceList">
+                        <div class="no-devices">
+                            Scanning for Hyperion/HyperHDR devices...
+                        </div>
+                    </div>
+                    <div class="ssdp-actions">
+                        <button class="btn btn-small" id="btnRescan" tabindex="4">
+                            🔍 Rescan
+                        </button>
+                        <button class="btn btn-small btn-primary" id="btnApplyDevices" tabindex="5">
+                            ✓ Apply Selection
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Logs -->
+            <div class="right-column">
+                <div class="section logs-section">
+                    <div class="logs-header">
+                        <h2>Live Logs</h2>
+                        <div class="logs-controls">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="autoScroll" checked>
+                                <span>Auto-scroll</span>
+                            </label>
+                            <button class="btn btn-small" id="btnClearLogs" tabindex="6">
+                                🗑 Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div class="logs-container" id="logsContainer">
+                        <div class="log-entry info">
+                            <span class="timestamp">[--:--:--]</span>
+                            <span class="type">[Info]</span>
+                            <span class="message">Connecting to HyperTizen service...</span>
+                        </div>
+                    </div>
+                    <div class="logs-footer">
+                        <span id="logCount">1</span> log entries
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-info">
+                <span>HyperTizen v1.0 | Tizen 8.0+ Fork</span>
+                <span class="separator">•</span>
+                <span id="wsStatus">WebSocket: Disconnected</span>
+            </div>
+            <div class="footer-help">
+                Use <kbd>↑</kbd> <kbd>↓</kbd> to navigate, <kbd>Enter</kbd> to select
+            </div>
+        </div>
     </div>
-</body>
 
-<script>
-    window.onload = function () {
-        let elements = document.querySelectorAll('button, input, [tabindex]');
-        let elementsArray = Array.prototype.slice.call(elements);
-        let focusedElement = document.activeElement;
-        let focusedIndex = elementsArray.indexOf(focusedElement);
+    <script>
+        // Initialize the application
+        window.onload = function () {
+            // Focus management for remote control
+            setupFocusManagement();
 
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                if (focusedIndex < elementsArray.length - 1) {
-                    elementsArray[focusedIndex + 1].focus();
-                    focusedIndex++;
-                }
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                if (focusedIndex > 0) {
-                    elementsArray[focusedIndex - 1].focus();
-                    focusedIndex--;
-                }
-            } else if (e.key == 'Enter') {
-                e.preventDefault();
-                const element = elementsArray[focusedIndex];
-                element.click();
-                if (element.classList.contains('ssdpItem')) {
-                    const uri = element.getAttribute('data-uri');
-                    setRPC(uri);
+            // Get device IP and initialize WebSocket connections
+            fetch('http://127.0.0.1:8081')
+                .then(res => res.text())
+                .then(ip => {
+                    window.deviceIP = ip;
+                    initializeApp(ip);
+                })
+                .catch(err => {
+                    console.error('Failed to get device IP:', err);
+                    addLog('Error', 'Failed to get device IP. Retrying...');
+                    setTimeout(() => location.reload(), 3000);
+                });
+        };
+
+        function setupFocusManagement() {
+            let focusableElements = [];
+            let currentFocusIndex = -1;
+
+            function updateFocusableElements() {
+                focusableElements = Array.from(
+                    document.querySelectorAll('button:not([disabled]), input[type="checkbox"], .device-item')
+                );
+            }
+
+            function focusElement(index) {
+                if (index >= 0 && index < focusableElements.length) {
+                    focusableElements[index].focus();
+                    currentFocusIndex = index;
                 }
             }
-        });
 
-        const observer = new MutationObserver(function (mutations) {
-            mutations.forEach(function (mutation) {
-                if (mutation.addedNodes.length > 0) {
-                    elements = document.querySelectorAll('button, input, [tabindex]');
-                    elementsArray = Array.prototype.slice.call(elements);
-                    focusedIndex = elementsArray.indexOf(document.activeElement);
+            // Handle keyboard navigation
+            document.addEventListener('keydown', function (e) {
+                updateFocusableElements();
+
+                if (currentFocusIndex === -1 && focusableElements.length > 0) {
+                    currentFocusIndex = 0;
+                }
+
+                switch (e.key) {
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        if (currentFocusIndex < focusableElements.length - 1) {
+                            focusElement(currentFocusIndex + 1);
+                        }
+                        break;
+
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        if (currentFocusIndex > 0) {
+                            focusElement(currentFocusIndex - 1);
+                        }
+                        break;
+
+                    case 'Enter':
+                        e.preventDefault();
+                        if (currentFocusIndex >= 0 && currentFocusIndex < focusableElements.length) {
+                            const element = focusableElements[currentFocusIndex];
+                            element.click();
+                        }
+                        break;
                 }
             });
-        });
 
-        observer.observe(document.body, { childList: true, subtree: true });
-        fetch('http://127.0.0.1:8081').then(res => res.text()).then(ip => {
-            deviceIP = ip;
+            // Track focus changes
+            document.addEventListener('focus', function (e) {
+                updateFocusableElements();
+                currentFocusIndex = focusableElements.indexOf(e.target);
+            }, true);
 
-            const testWS = new WebSocket(`ws://${ip}:8086`);
+            // Initialize focus on first element
+            updateFocusableElements();
+            if (focusableElements.length > 0) {
+                focusElement(0);
+            }
 
-            testWS.onopen = function () {
-                testWS.close();
-                open();
-            };
-            testWS.onerror = function () {
-                location.reload();
-            };
-        });
-    };
-</script>
+            // Observe DOM changes to update focusable elements
+            const observer = new MutationObserver(updateFocusableElements);
+            observer.observe(document.body, { childList: true, subtree: true });
+        }
+    </script>
+</body>
 
 </html>
