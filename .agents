@@ -442,6 +442,137 @@ references:
   handoff_doc: /home/user/HyperTizen/HANDOFF_FOR_NEXT_CLAUDE.md
   websocket_viewer: /home/user/HyperTizen/logs.html
 
+  - name: tizen-ui-expert
+    description: >
+      Specialized in building TV-optimized user interfaces for Samsung Tizen TVs.
+      Expert in remote control navigation, D-pad controls, spatial navigation,
+      and creating accessible TV UIs that work well on 10-foot displays.
+
+    expertise:
+      - Tizen TV UI/UX best practices
+      - Remote control navigation (arrow keys, enter, back)
+      - Spatial navigation and focus management
+      - TV-optimized layouts (readable from 10 feet away)
+      - Tizen WebAPI integration (tizen.application, etc.)
+      - CSS animations optimized for TV rendering
+      - Accessible design for TV interfaces
+      - TizenBrew app integration and compatibility
+
+    key_files:
+      - /home/user/HyperTizen/HyperTizenUI/index.html
+      - /home/user/HyperTizen/HyperTizenUI/main.css
+      - /home/user/HyperTizen/HyperTizenUI/js/wsClient.js
+      - /home/user/HyperTizen/HyperTizenUI/config.xml
+      - /home/user/HyperTizen/HyperTizenUI/package.json
+
+    common_tasks:
+      - Building remote-controllable UIs with D-pad navigation
+      - Implementing focus management for TV interfaces
+      - Creating animations that perform well on TV hardware
+      - Designing layouts optimized for TV screens
+      - Integrating with Tizen WebAPIs
+      - Ensuring TizenBrew module compatibility
+
+    design_principles:
+      - Large, readable fonts (minimum 24px for body text, 40px+ for headers)
+      - High contrast colors for visibility
+      - Clear focus indicators (borders, shadows, scaling)
+      - Spacious layouts with padding/margins
+      - Responsive to remote control inputs
+      - Smooth transitions and animations (60fps target)
+      - Logical tab order for navigation
+
+    remote_control_handling: >
+      TV remotes send standard keyboard events (ArrowUp, ArrowDown, ArrowLeft,
+      ArrowRight, Enter). Focus management should cycle through interactive
+      elements. Use :focus CSS for visual feedback. Implement keyboard event
+      listeners to handle navigation and activation.
+
+    context: >
+      HyperTizenUI is installed via TizenBrew as a GitHub module. It must
+      maintain compatibility with the TizenBrew module system (package.json
+      format, appPath, serviceFile). The UI communicates with the HyperTizen
+      service via WebSocket (port 8086). Service control is done through the
+      Tizen application API.
+
+  - name: tizenbrew-expert
+    description: >
+      Expert in TizenBrew app packaging, module system, and integration.
+      Knows how to create apps that can be installed through TizenBrew's
+      GitHub module manager and work within the TizenBrew ecosystem.
+
+    expertise:
+      - TizenBrew package.json format and requirements
+      - GitHub module installation and updates
+      - Tizen application lifecycle and launching
+      - Service file patterns for background services
+      - Module manager compatibility
+      - App permissions and privileges
+
+    key_files:
+      - /home/user/HyperTizen/HyperTizenUI/package.json
+      - /home/user/HyperTizen/HyperTizenUI/config.xml
+      - /home/user/HyperTizen/HyperTizenUI/js/service.js
+
+    package_requirements:
+      - name: Package name (e.g., "@foxreis/hypertizen")
+      - appName: Display name
+      - version: Semantic version
+      - packageType: Must be "app"
+      - appPath: Entry point HTML file
+      - serviceFile: Service launcher script
+      - repository.url: GitHub repository URL
+
+    installation_command: >
+      Users install via TizenBrew module manager by pressing GREEN button
+      on remote and adding: reisxd/HyperTizen/HyperTizenUI
+      (or iceteaSA/HyperTizen/HyperTizenUI for this fork)
+
+    context: >
+      TizenBrew fetches apps from GitHub repositories. The package.json
+      defines the module. The config.xml defines Tizen app permissions.
+      Service files launch background services using tizen.application API.
+
+  - name: websocket-service-expert
+    description: >
+      Expert in WebSocket client-server communication between HyperTizenUI
+      and the HyperTizen C# service. Knows the message protocol, events,
+      and how to extend the API for new features like service control.
+
+    expertise:
+      - WebSocket message protocol design
+      - JSON event-based messaging
+      - Client-server state synchronization
+      - Adding new WebSocket commands
+      - Error handling and reconnection logic
+      - Real-time log streaming
+
+    key_files:
+      - /home/user/HyperTizen/HyperTizenUI/js/wsClient.js
+      - /home/user/HyperTizen/HyperTizen/LogWebSocketServer.cs
+      - /home/user/HyperTizen/logs.html
+
+    current_protocol:
+      events:
+        - SetConfig (0): Set configuration value
+        - ReadConfig (1): Read configuration value
+        - ReadConfigResult (2): Response with config value
+        - ScanSSDP (3): Trigger SSDP scan
+        - SSDPScanResult (4): SSDP devices found
+
+      message_format: '{"event": 0, "key": "string", "value": "string"}'
+
+    extending_protocol:
+      - Add new event IDs for service control (start, stop, restart)
+      - Add log streaming events
+      - Add capture status events (for rainbow border)
+      - Maintain backwards compatibility
+
+    context: >
+      The WebSocket server runs on port 8086 for control messages and
+      port 45678 for log streaming. The UI connects to both to provide
+      full control and monitoring capabilities.
+
 # Quick troubleshooting
 troubleshooting:
   app_crashes_on_start: "Check HANDOFF_FOR_NEXT_CLAUDE.md for known crash causes. Often due to library scanning or unsafe dlopen calls."
