@@ -138,12 +138,15 @@ namespace HyperTizen
 
         public static async Task SendImageAsync(byte[] yData, byte[] uvData, int width, int height)
         {
+            Helper.Log.Write(Helper.eLogType.Debug,
+                $"→ SendImageAsync: ENTRY - buffers Y={yData?.Length ?? 0} UV={uvData?.Length ?? 0}, size {width}x{height}");
+
             // ENHANCED NULL SAFETY: Check client validity before proceeding
             try
             {
                 if (client == null)
                 {
-                    Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: client is null");
+                    Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: ❌ client is null");
                     return;
                 }
 
@@ -176,17 +179,39 @@ namespace HyperTizen
                 return;
             }
 
-            byte[] message = CreateFlatBufferMessage(yData, uvData, width, height);
-            if (message == null)
+            // CRITICAL: Validate buffer parameters at entry point
+            if (yData == null || uvData == null)
             {
-                Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: CreateFlatBufferMessage returned null");
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"SendImageAsync: Null buffers (yData={yData == null}, uvData={uvData == null})");
                 return;
             }
 
+            if (width <= 0 || height <= 0)
+            {
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"SendImageAsync: Invalid dimensions ({width}x{height})");
+                return;
+            }
+
+            Helper.Log.Write(Helper.eLogType.Debug, "SendImageAsync: Creating FlatBuffer message...");
+            byte[] message = CreateFlatBufferMessage(yData, uvData, width, height);
+            if (message == null)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, "SendImageAsync: ❌ CreateFlatBufferMessage returned null");
+                return;
+            }
+
+            Helper.Log.Write(Helper.eLogType.Debug,
+                $"SendImageAsync: ✓ FlatBuffer created ({message.Length} bytes), queueing send...");
+
+            // Fire-and-forget required to avoid blocking capture loop
+            // Validation above ensures buffers are correct before sending
             var watchFPS = System.Diagnostics.Stopwatch.StartNew();
             _ = SendMessageAndReceiveReplyAsync(message);
             watchFPS.Stop();
-            Helper.Log.Write(Helper.eLogType.Performance, "SendImageAsync elapsed ms: " + watchFPS.ElapsedMilliseconds);
+            Helper.Log.Write(Helper.eLogType.Debug,
+                $"SendImageAsync: ✓ Message queued for async send in {watchFPS.ElapsedMilliseconds}ms");
         }
         static byte[] CreateFlatBufferMessage(byte[] yData, byte[] uvData, int width, int height)
         {
@@ -227,6 +252,47 @@ namespace HyperTizen
                 Helper.Log.Write(Helper.eLogType.Error, $"CreateFlatBufferMessage: Object disposed: {ex.Message}");
                 return null;
             }
+
+            // CRITICAL: Validate buffer parameters before using them
+            if (yData == null)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, "CreateFlatBufferMessage: yData is null");
+                return null;
+            }
+
+            if (uvData == null)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, "CreateFlatBufferMessage: uvData is null");
+                return null;
+            }
+
+            if (width <= 0 || height <= 0)
+            {
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"CreateFlatBufferMessage: Invalid dimensions ({width}x{height})");
+                return null;
+            }
+
+            // CRITICAL: Validate buffer sizes match NV12 format
+            int expectedYSize = width * height;
+            int expectedUVSize = (width * height) / 2;
+
+            if (yData.Length != expectedYSize)
+            {
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"CreateFlatBufferMessage: Invalid Y buffer size. Expected {expectedYSize}, got {yData.Length}");
+                return null;
+            }
+
+            if (uvData.Length != expectedUVSize)
+            {
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"CreateFlatBufferMessage: Invalid UV buffer size. Expected {expectedUVSize}, got {uvData.Length}");
+                return null;
+            }
+
+            Helper.Log.Write(Helper.eLogType.Debug,
+                $"CreateFlatBufferMessage: Validated buffers (Y={yData.Length}, UV={uvData.Length}) for {width}x{height}");
 
             var builder = new FlatBufferBuilder(yData.Length + uvData.Length + 100);
 
@@ -451,8 +517,15 @@ namespace HyperTizen
         {
             try
             {
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"  → SendMessageAndReceiveReplyAsync: ENTRY with {message.Length} byte message");
+
                 if (client == null || !client.Connected || stream == null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning,
+                        $"  → SendMessageAndReceiveReplyAsync: ❌ Connection not ready (client={client != null}, connected={client?.Connected ?? false}, stream={stream != null})");
                     return;
+                }
 
                 // HyperHDR expects BIG-ENDIAN 4-byte size prefix (not FlatBuffers standard little-endian)
                 var header = new byte[4];
@@ -461,11 +534,16 @@ namespace HyperTizen
                 header[2] = (byte)((message.Length >> 8) & 0xFF);
                 header[3] = (byte)(message.Length & 0xFF);
 
-                Helper.Log.Write(Helper.eLogType.Info, "SendMessageAndReceiveReply: message.Length; " + message.Length);
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"  → SendMessageAndReceiveReplyAsync: Writing {message.Length} bytes to HyperHDR...");
+
                 await stream.WriteAsync(header, 0, header.Length);
                 await stream.WriteAsync(message, 0, message.Length);
                 await stream.FlushAsync();
-                Helper.Log.Write(Helper.eLogType.Info, "SendMessageAndReceiveReply: Data sent");
+
+                Helper.Log.Write(Helper.eLogType.Info,
+                    $"  → SendMessageAndReceiveReplyAsync: ✓ Frame sent to HyperHDR ({message.Length} bytes)");
+
                 _ = ReadImageReply();
             }
             catch (Exception ex)
