@@ -57,6 +57,25 @@ namespace HyperTizen.WebSocket
                 _connectedClients.Add(webSocket);
             }
 
+            // Send initial status to newly connected client
+            try
+            {
+                bool isCapturing = App.Configuration.Enabled;
+                string initialStatus = isCapturing ? "capturing" : "stopped";
+                string initialMessage = isCapturing ? "Currently capturing" : "Capture stopped";
+
+                string statusEvent = JsonConvert.SerializeObject(new StatusUpdateEvent(initialStatus, initialMessage));
+                await SendAsync(webSocket, statusEvent);
+
+                Helper.Log.Write(Helper.eLogType.Info,
+                    $"Sent initial status to client: {initialStatus}");
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Warning,
+                    $"Failed to send initial status to client: {ex.Message}");
+            }
+
             try
             {
                 var buffer = new byte[1024 * 4];
@@ -83,41 +102,55 @@ namespace HyperTizen.WebSocket
 
         protected async Task OnMessageAsync(System.Net.WebSockets.WebSocket webSocket, string message)
         {
-            BasicEvent data = JsonConvert.DeserializeObject<BasicEvent>(message);
-
-            switch (data.Event)
+            try
             {
-                case Event.ScanSSDP:
-                    {
-                        var devices = await ScanSSDPAsync();
-                        string resultEvent = JsonConvert.SerializeObject(new SSDPScanResultEvent(devices));
-                        await SendAsync(webSocket, resultEvent);
-                        break;
-                    }
+                BasicEvent data = JsonConvert.DeserializeObject<BasicEvent>(message);
 
-                case Event.GetLogs:
-                    {
-                        var logs = Helper.Log.GetRecentLogs();
-                        string logPath = Helper.Log.GetWorkingLogPath();
-                        string resultEvent = JsonConvert.SerializeObject(new LogsResultEvent(logs, logPath));
-                        await SendAsync(webSocket, resultEvent);
-                        break;
-                    }
+                switch (data.Event)
+                {
+                    case Event.ScanSSDP:
+                        {
+                            var devices = await ScanSSDPAsync();
+                            string resultEvent = JsonConvert.SerializeObject(new SSDPScanResultEvent(devices));
+                            await SendAsync(webSocket, resultEvent);
+                            break;
+                        }
 
-                case Event.ReadConfig:
-                    {
-                        ReadConfigEvent readConfigEvent = JsonConvert.DeserializeObject<ReadConfigEvent>(message);
-                        string result = await ReadConfigAsync(readConfigEvent);
-                        await SendAsync(webSocket, result);
-                        break;
-                    }
+                    case Event.GetLogs:
+                        {
+                            var logs = Helper.Log.GetRecentLogs();
+                            string logPath = Helper.Log.GetWorkingLogPath();
+                            string resultEvent = JsonConvert.SerializeObject(new LogsResultEvent(logs, logPath));
+                            await SendAsync(webSocket, resultEvent);
+                            break;
+                        }
 
-                case Event.SetConfig:
-                    {
-                        SetConfigEvent setConfigEvent = JsonConvert.DeserializeObject<SetConfigEvent>(message);
-                        SetConfiguration(setConfigEvent);
-                        break;
-                    }
+                    case Event.ReadConfig:
+                        {
+                            ReadConfigEvent readConfigEvent = JsonConvert.DeserializeObject<ReadConfigEvent>(message);
+                            string result = await ReadConfigAsync(readConfigEvent);
+                            await SendAsync(webSocket, result);
+                            break;
+                        }
+
+                    case Event.SetConfig:
+                        {
+                            SetConfigEvent setConfigEvent = JsonConvert.DeserializeObject<SetConfigEvent>(message);
+                            await SetConfiguration(setConfigEvent);
+                            break;
+                        }
+                }
+            }
+            catch (JsonException jsonEx)
+            {
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"Invalid JSON received from WebSocket client: {jsonEx.Message}");
+                Helper.Log.Write(Helper.eLogType.Debug, $"Message: {message}");
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"Error processing WebSocket message: {ex.GetType().Name}: {ex.Message}");
             }
         }
 
@@ -187,33 +220,76 @@ namespace HyperTizen.WebSocket
             }
         }
 
-        void SetConfiguration(SetConfigEvent setConfigEvent)
+        async Task SetConfiguration(SetConfigEvent setConfigEvent)
         {
             switch (setConfigEvent.key)
             {
                 case "rpcServer":
                     {
                         App.Configuration.RPCServer = setConfigEvent.value;
+                        Helper.Log.Write(Helper.eLogType.Info, $"RPC server set to: {setConfigEvent.value}");
                         //App.client.UpdateURI(setConfigEvent.value);
                         break;
                     }
                 case "enabled":
                     {
-                        bool value = bool.Parse(setConfigEvent.value);
-                        if (!App.Configuration.Enabled && value)
+                        // Validate input to prevent crashes
+                        if (!bool.TryParse(setConfigEvent.value, out bool value))
                         {
-                            App.Configuration.Enabled = value;
-                            Globals.Instance.Enabled = value;
-                            Task.Run(() => App.client.Start());
-                            _ = BroadcastStatusUpdate("capturing", "Screen capture started");
+                            Helper.Log.Write(Helper.eLogType.Error,
+                                $"Invalid boolean value for 'enabled': {setConfigEvent.value}");
+                            return;
                         }
-                        else
+
+                        // Synchronize state changes with lock to prevent race conditions
+                        bool stateChanged = false;
+                        bool newState = false;
+
+                        lock (_clientsLock)
                         {
+                            bool wasEnabled = App.Configuration.Enabled;
                             App.Configuration.Enabled = value;
                             Globals.Instance.Enabled = value;
-                            if (!value)
+
+                            if (wasEnabled != value)
                             {
-                                _ = BroadcastStatusUpdate("stopped", "Screen capture stopped");
+                                stateChanged = true;
+                                newState = value;
+                                Helper.Log.Write(Helper.eLogType.Info,
+                                    $"Capture state changed: {wasEnabled} -> {value}");
+                            }
+                        }
+
+                        // Perform state-dependent actions outside the lock
+                        if (stateChanged)
+                        {
+                            if (newState)
+                            {
+                                Helper.Log.Write(Helper.eLogType.Info, "Starting screen capture");
+                                Task.Run(() => App.client.Start());
+                            }
+                            else
+                            {
+                                Helper.Log.Write(Helper.eLogType.Info, "Stopping screen capture");
+                                // TODO: Implement proper Stop() method in HyperionClient
+                            }
+
+                            // Broadcast status update with error handling
+                            try
+                            {
+                                if (newState)
+                                {
+                                    await BroadcastStatusUpdate("capturing", "Screen capture started");
+                                }
+                                else
+                                {
+                                    await BroadcastStatusUpdate("stopped", "Screen capture stopped");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Helper.Log.Write(Helper.eLogType.Warning,
+                                    $"Failed to broadcast status update: {ex.Message}");
                             }
                         }
                         break;

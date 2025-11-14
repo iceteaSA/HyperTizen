@@ -50,7 +50,11 @@ namespace HyperTizen
                 ServerPort = port;
             }
 
-            Enabled = bool.Parse(Preference.Get<string>("enabled"));
+            // Safe parsing of enabled preference with fallback to false
+            string enabledPref = Preference.Contains("enabled") ? Preference.Get<string>("enabled") : "false";
+            Enabled = bool.TryParse(enabledPref, out bool enabledResult) && enabledResult;
+            Helper.Log.Write(Helper.eLogType.Info, $"Loaded enabled setting: {Enabled}");
+
             Width = 3840/8;
             Height = 2160/8;
         }
