@@ -45,10 +45,8 @@ namespace HyperTizen
                         Helper.Log.Write(Helper.eLogType.Info,
                             $"Config: Using saved server {ServerIp}:{ServerPort} from preferences");
 
-                        // Safe parsing of enabled preference with fallback to false
-                        string enabledPref = Preference.Contains("enabled") ? Preference.Get<string>("enabled") : "false";
-                        Enabled = bool.TryParse(enabledPref, out bool enabledResult) && enabledResult;
-                        Helper.Log.Write(Helper.eLogType.Info, $"Loaded enabled setting: {Enabled}");
+                        // Load enabled preference
+                        LoadEnabledPreference();
 
                         Width = 3840/8;
                         Height = 2160/8;
@@ -83,13 +81,19 @@ namespace HyperTizen
                 ServerPort = port;
             }
 
+            // Load enabled preference
+            LoadEnabledPreference();
+
+            Width = 3840/8;
+            Height = 2160/8;
+        }
+
+        private void LoadEnabledPreference()
+        {
             // Safe parsing of enabled preference with fallback to false
             string enabledPref = Preference.Contains("enabled") ? Preference.Get<string>("enabled") : "false";
             Enabled = bool.TryParse(enabledPref, out bool enabledResult) && enabledResult;
             Helper.Log.Write(Helper.eLogType.Info, $"Loaded enabled setting: {Enabled}");
-
-            Width = 3840/8;
-            Height = 2160/8;
         }
 
         public string ServerIp; //IP of hyperhdr server
