@@ -275,19 +275,30 @@ namespace HyperTizen
 
                 if (pixelSuccess && !timedOut && colors != null)
                 {
-                    Helper.Log.Write(Helper.eLogType.Performance,
-                        $"VideoEnhanceCapture: Captured {colors.Length} pixels in {watchPixel.ElapsedMilliseconds}ms");
+                    Helper.Log.Write(Helper.eLogType.Debug,
+                        $"DoCapture (pixel): SUCCESS - Captured {colors.Length} pixels in {watchPixel.ElapsedMilliseconds}ms");
 
                     // Convert pixel samples to NV12 format
+                    Helper.Log.Write(Helper.eLogType.Debug,
+                        $"DoCapture (pixel): Converting {colors.Length} RGB samples to NV12 ({Globals.Instance.Width}x{Globals.Instance.Height})...");
+
                     ConvertPixelSamplesToNV12(colors, managedArrayY, managedArrayUV,
                         Globals.Instance.Width, Globals.Instance.Height);
+
+                    Helper.Log.Write(Helper.eLogType.Debug,
+                        $"DoCapture (pixel): NV12 conversion complete (Y={managedArrayY.Length} bytes, UV={managedArrayUV.Length} bytes)");
 
                     isRunning = true;
 
                     // ENHANCED NULL SAFETY: Wrap network call in try-catch
+                    Helper.Log.Write(Helper.eLogType.Debug,
+                        $"DoCapture (pixel): Calling SendImageAsync...");
+
                     try
                     {
                         _ = Networking.SendImageAsync(managedArrayY, managedArrayUV, Globals.Instance.Width, Globals.Instance.Height);
+                        Helper.Log.Write(Helper.eLogType.Debug,
+                            $"DoCapture (pixel): SendImageAsync called (fire-and-forget)");
                     }
                     catch (NullReferenceException ex)
                     {
