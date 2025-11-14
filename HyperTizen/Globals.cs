@@ -36,14 +36,34 @@ namespace HyperTizen
                 string rpcServer = Preference.Get<string>("rpcServer");
                 if (!string.IsNullOrEmpty(rpcServer))
                 {
-                    // Parse ws://ip:port format
+                    // Parse ws://ip:port format to get the IP
                     try
                     {
                         var uri = new Uri(rpcServer.Replace("ws://", "http://").Replace("wss://", "https://"));
                         ServerIp = uri.Host;
-                        ServerPort = uri.Port;
+
+                        // IMPORTANT: Don't use the WebSocket port (8090)!
+                        // The saved rpcServer is for WebSocket/JSON API, but we need the FlatBuffers port.
+                        // Try SSDP to get the correct FlatBuffers port for this IP
                         Helper.Log.Write(Helper.eLogType.Info,
-                            $"Config: Using saved server {ServerIp}:{ServerPort} from preferences");
+                            $"Config: Saved server IP {ServerIp} from preferences, discovering FlatBuffers port...");
+
+                        (string ssdpIp, int fbsPort) = Helper.SsdpDiscovery.GetHyperIpAndPort();
+
+                        // If SSDP found the same server, use its FlatBuffers port
+                        if (!string.IsNullOrEmpty(ssdpIp) && ssdpIp == ServerIp && fbsPort > 0)
+                        {
+                            ServerPort = fbsPort;
+                            Helper.Log.Write(Helper.eLogType.Info,
+                                $"Config: Using FlatBuffers port {ServerPort} from SSDP for {ServerIp}");
+                        }
+                        else
+                        {
+                            // Fallback to default FlatBuffers port
+                            ServerPort = 19400;
+                            Helper.Log.Write(Helper.eLogType.Warning,
+                                $"Config: SSDP didn't find server, using default FlatBuffers port {ServerPort}");
+                        }
 
                         // Load enabled preference
                         LoadEnabledPreference();
