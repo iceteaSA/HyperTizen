@@ -149,47 +149,106 @@
             let currentFocusIndex = -1;
 
             function updateFocusableElements() {
+                // Get all focusable elements in document order
                 focusableElements = Array.from(
                     document.querySelectorAll('button:not([disabled]), input[type="checkbox"], .device-item')
                 );
+
+                // If current element is no longer focusable, reset index
+                if (currentFocusIndex >= focusableElements.length) {
+                    currentFocusIndex = focusableElements.length - 1;
+                }
             }
 
             function focusElement(index) {
                 if (index >= 0 && index < focusableElements.length) {
                     focusableElements[index].focus();
                     currentFocusIndex = index;
+
+                    // Scroll element into view if needed
+                    focusableElements[index].scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'nearest',
+                        inline: 'nearest'
+                    });
                 }
             }
 
-            // Handle keyboard navigation
+            // Handle keyboard navigation for TV remote
             document.addEventListener('keydown', function (e) {
                 updateFocusableElements();
 
+                // Initialize focus if not set
                 if (currentFocusIndex === -1 && focusableElements.length > 0) {
                     currentFocusIndex = 0;
+                    focusElement(0);
+                    return;
                 }
 
-                switch (e.key) {
+                const key = e.keyCode || e.which;
+
+                switch (e.key || key) {
                     case 'ArrowDown':
+                    case 40: // Down arrow keyCode
                         e.preventDefault();
+                        e.stopPropagation();
                         if (currentFocusIndex < focusableElements.length - 1) {
                             focusElement(currentFocusIndex + 1);
+                        } else {
+                            // Wrap to first element
+                            focusElement(0);
                         }
                         break;
 
                     case 'ArrowUp':
+                    case 38: // Up arrow keyCode
                         e.preventDefault();
+                        e.stopPropagation();
                         if (currentFocusIndex > 0) {
                             focusElement(currentFocusIndex - 1);
+                        } else {
+                            // Wrap to last element
+                            focusElement(focusableElements.length - 1);
                         }
                         break;
 
-                    case 'Enter':
+                    case 'ArrowLeft':
+                    case 37: // Left arrow keyCode
                         e.preventDefault();
+                        e.stopPropagation();
+                        // For horizontal navigation within the same row (optional)
+                        break;
+
+                    case 'ArrowRight':
+                    case 39: // Right arrow keyCode
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // For horizontal navigation within the same row (optional)
+                        break;
+
+                    case 'Enter':
+                    case 13: // Enter keyCode
+                        e.preventDefault();
+                        e.stopPropagation();
                         if (currentFocusIndex >= 0 && currentFocusIndex < focusableElements.length) {
                             const element = focusableElements[currentFocusIndex];
-                            element.click();
+
+                            // Special handling for checkboxes
+                            if (element.type === 'checkbox') {
+                                element.checked = !element.checked;
+                                // Trigger change event
+                                const event = new Event('change', { bubbles: true });
+                                element.dispatchEvent(event);
+                            } else {
+                                // For buttons and other elements, trigger click
+                                element.click();
+                            }
                         }
+                        break;
+
+                    case 'Back':
+                    case 10009: // Samsung TV Back button
+                        // Allow default back behavior
                         break;
                 }
             });
@@ -197,18 +256,50 @@
             // Track focus changes
             document.addEventListener('focus', function (e) {
                 updateFocusableElements();
-                currentFocusIndex = focusableElements.indexOf(e.target);
+                const index = focusableElements.indexOf(e.target);
+                if (index !== -1) {
+                    currentFocusIndex = index;
+                }
             }, true);
 
-            // Initialize focus on first element
-            updateFocusableElements();
-            if (focusableElements.length > 0) {
-                focusElement(0);
-            }
+            // Track active element changes
+            document.addEventListener('blur', function (e) {
+                // Update focusable elements when something loses focus
+                updateFocusableElements();
+            }, true);
+
+            // Initialize focus on first button
+            setTimeout(() => {
+                updateFocusableElements();
+                if (focusableElements.length > 0) {
+                    focusElement(0);
+                }
+            }, 100);
 
             // Observe DOM changes to update focusable elements
-            const observer = new MutationObserver(updateFocusableElements);
-            observer.observe(document.body, { childList: true, subtree: true });
+            const observer = new MutationObserver(() => {
+                const previousLength = focusableElements.length;
+                updateFocusableElements();
+
+                // If new elements were added and we had no focus, focus the first one
+                if (previousLength === 0 && focusableElements.length > 0 && currentFocusIndex === -1) {
+                    focusElement(0);
+                }
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['disabled']
+            });
+
+            // Store in window for debugging
+            window.focusDebug = {
+                getFocusableElements: () => focusableElements,
+                getCurrentIndex: () => currentFocusIndex,
+                focusElement: focusElement
+            };
         }
     </script>
 </body>
