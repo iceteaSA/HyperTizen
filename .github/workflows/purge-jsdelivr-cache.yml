@@ -12,8 +12,8 @@ jobs:
   purge-cache:
     runs-on: ubuntu-latest
     steps:
-      - name: Purge jsDelivr cache for entire repository
-        uses: gacts/purge-jsdelivr-cache@v1
+      - name: jsDelivr Cache Purge
+        uses: kaycodes13/purge-jsdelivr-cache@v1.1.0
         with:
           url: |
             https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/*
