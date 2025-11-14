@@ -67,7 +67,7 @@ namespace HyperTizen.WebSocket
                 string statusEvent = JsonConvert.SerializeObject(new StatusUpdateEvent(initialStatus, initialMessage));
                 await SendAsync(webSocket, statusEvent);
 
-                Helper.Log.Write(Helper.eLogType.Info,
+                Helper.Log.Write(Helper.eLogType.Debug,
                     $"Sent initial status to client: {initialStatus}");
             }
             catch (Exception ex)
@@ -142,7 +142,7 @@ namespace HyperTizen.WebSocket
 
                     case Event.PauseCapture:
                         {
-                            Helper.Log.Write(Helper.eLogType.Info, "Pause capture requested via WebSocket");
+                            Helper.Log.Write(Helper.eLogType.Debug, "Pause capture requested via WebSocket");
                             App.client.Pause();
                             await BroadcastStatusUpdate("paused", "Capture paused");
                             break;
@@ -150,7 +150,7 @@ namespace HyperTizen.WebSocket
 
                     case Event.ResumeCapture:
                         {
-                            Helper.Log.Write(Helper.eLogType.Info, "Resume capture requested via WebSocket");
+                            Helper.Log.Write(Helper.eLogType.Debug, "Resume capture requested via WebSocket");
                             App.client.Resume();
                             await BroadcastStatusUpdate("capturing", "Capture resumed");
                             break;
@@ -158,7 +158,7 @@ namespace HyperTizen.WebSocket
 
                     case Event.GetStatus:
                         {
-                            Helper.Log.Write(Helper.eLogType.Info, "Status requested via WebSocket");
+                            Helper.Log.Write(Helper.eLogType.Debug, "Status requested via WebSocket");
                             var status = App.client.GetStatus();
 
                             string uptime = "N/A";
@@ -168,6 +168,13 @@ namespace HyperTizen.WebSocket
                                 uptime = $"{elapsed.Hours:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
                             }
 
+                            // Build active server URL from current configuration
+                            string activeServerUrl = null;
+                            if (!string.IsNullOrEmpty(Globals.Instance.ServerIp) && Globals.Instance.ServerPort > 0)
+                            {
+                                activeServerUrl = $"ws://{Globals.Instance.ServerIp}:{Globals.Instance.ServerPort}";
+                            }
+
                             string resultEvent = JsonConvert.SerializeObject(new StatusResultEvent(
                                 status.State.ToString(),
                                 status.FramesCaptured,
@@ -175,9 +182,39 @@ namespace HyperTizen.WebSocket
                                 status.ErrorCount,
                                 status.IsConnected,
                                 status.LastError ?? "None",
-                                uptime
+                                uptime,
+                                activeServerUrl
                             ));
                             await SendAsync(webSocket, resultEvent);
+                            break;
+                        }
+
+                    case Event.RestartService:
+                        {
+                            Helper.Log.Write(Helper.eLogType.Info, "Service restart requested via WebSocket");
+                            try
+                            {
+                                // Stop the current capture
+                                await App.client.Stop();
+                                await BroadcastStatusUpdate("stopped", "Service restarting...");
+
+                                // Wait a moment for cleanup
+                                await System.Threading.Tasks.Task.Delay(500);
+
+                                // Start again
+                                System.Threading.Tasks.Task.Run(() => App.client.Start());
+                                await BroadcastStatusUpdate("starting", "Service restarted");
+
+                                Helper.Log.Write(Helper.eLogType.Info, "Service restarted successfully");
+                            }
+                            catch (Exception ex)
+                            {
+                                Helper.Log.Write(Helper.eLogType.Error,
+                                    $"Failed to restart service: {ex.Message}");
+                                await SendAsync(webSocket, JsonConvert.SerializeObject(
+                                    new StatusUpdateEvent("error", $"Restart failed: {ex.Message}")
+                                ));
+                            }
                             break;
                         }
                 }

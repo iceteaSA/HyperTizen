@@ -109,7 +109,8 @@ namespace HyperTizen
                 Helper.Log.Write(Helper.eLogType.Info, "HyperionClient starting...");
 
                 // DIAGNOSTIC MODE: Set to true to pause for 10 minutes after initialization
-                const bool DIAGNOSTIC_MODE = true;
+                // Changed to false for normal operation - set to true only for debugging
+                const bool DIAGNOSTIC_MODE = false;
 
                 Globals.Instance.SetConfig();
 

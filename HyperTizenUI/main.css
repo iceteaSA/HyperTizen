@@ -358,6 +358,26 @@ body {
     border: 2px solid #4fc3f7;
 }
 
+.device-item.active {
+    background: rgba(76, 175, 80, 0.2);
+    border: 2px solid #4caf50;
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.5);
+}
+
+.device-item.active .indicator-dot {
+    background: #4caf50;
+    box-shadow: 0 0 10px rgba(76, 175, 80, 0.8);
+}
+
+.active-badge {
+    animation: pulse-green 2s ease-in-out infinite;
+}
+
+@keyframes pulse-green {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
 .ssdp-actions {
     display: flex;
     gap: 10px;
