@@ -90,8 +90,8 @@ namespace HyperTizen
 
         private void LoadEnabledPreference()
         {
-            // Safe parsing of enabled preference with fallback to false
-            string enabledPref = Preference.Contains("enabled") ? Preference.Get<string>("enabled") : "false";
+            // Safe parsing of enabled preference with fallback to TRUE (service enabled by default)
+            string enabledPref = Preference.Contains("enabled") ? Preference.Get<string>("enabled") : "true";
             Enabled = bool.TryParse(enabledPref, out bool enabledResult) && enabledResult;
             Helper.Log.Write(Helper.eLogType.Info, $"Loaded enabled setting: {Enabled}");
         }
