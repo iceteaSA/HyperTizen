@@ -176,17 +176,34 @@ namespace HyperTizen
                 return;
             }
 
-            byte[] message = CreateFlatBufferMessage(yData, uvData, width, height);
-            if (message == null)
+            // CRITICAL: Validate buffer parameters at entry point
+            if (yData == null || uvData == null)
             {
-                Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: CreateFlatBufferMessage returned null");
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"SendImageAsync: Null buffers (yData={yData == null}, uvData={uvData == null})");
                 return;
             }
 
+            if (width <= 0 || height <= 0)
+            {
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"SendImageAsync: Invalid dimensions ({width}x{height})");
+                return;
+            }
+
+            byte[] message = CreateFlatBufferMessage(yData, uvData, width, height);
+            if (message == null)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, "SendImageAsync: CreateFlatBufferMessage returned null");
+                return;
+            }
+
+            // Fire-and-forget required to avoid blocking capture loop
+            // Validation above ensures buffers are correct before sending
             var watchFPS = System.Diagnostics.Stopwatch.StartNew();
             _ = SendMessageAndReceiveReplyAsync(message);
             watchFPS.Stop();
-            Helper.Log.Write(Helper.eLogType.Performance, "SendImageAsync elapsed ms: " + watchFPS.ElapsedMilliseconds);
+            Helper.Log.Write(Helper.eLogType.Performance, "SendImageAsync: Message queued in " + watchFPS.ElapsedMilliseconds + "ms");
         }
         static byte[] CreateFlatBufferMessage(byte[] yData, byte[] uvData, int width, int height)
         {
@@ -227,6 +244,47 @@ namespace HyperTizen
                 Helper.Log.Write(Helper.eLogType.Error, $"CreateFlatBufferMessage: Object disposed: {ex.Message}");
                 return null;
             }
+
+            // CRITICAL: Validate buffer parameters before using them
+            if (yData == null)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, "CreateFlatBufferMessage: yData is null");
+                return null;
+            }
+
+            if (uvData == null)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, "CreateFlatBufferMessage: uvData is null");
+                return null;
+            }
+
+            if (width <= 0 || height <= 0)
+            {
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"CreateFlatBufferMessage: Invalid dimensions ({width}x{height})");
+                return null;
+            }
+
+            // CRITICAL: Validate buffer sizes match NV12 format
+            int expectedYSize = width * height;
+            int expectedUVSize = (width * height) / 2;
+
+            if (yData.Length != expectedYSize)
+            {
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"CreateFlatBufferMessage: Invalid Y buffer size. Expected {expectedYSize}, got {yData.Length}");
+                return null;
+            }
+
+            if (uvData.Length != expectedUVSize)
+            {
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"CreateFlatBufferMessage: Invalid UV buffer size. Expected {expectedUVSize}, got {uvData.Length}");
+                return null;
+            }
+
+            Helper.Log.Write(Helper.eLogType.Debug,
+                $"CreateFlatBufferMessage: Validated buffers (Y={yData.Length}, UV={uvData.Length}) for {width}x{height}");
 
             var builder = new FlatBufferBuilder(yData.Length + uvData.Length + 100);
 
