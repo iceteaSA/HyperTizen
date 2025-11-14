@@ -42,25 +42,18 @@ This fork is primarily focused on research and proof-of-concept implementations 
 
 ---
 
-## BREAKTHROUGH: Working Capture on Tizen 8!
-
 ### VideoEnhance Pixel Sampling (WORKING)
-
-We've successfully implemented a working capture method for Tizen 8.0+ using **libvideoenhance.so** to sample RGB pixels from the video stream.
 
 **Key Details:**
 - Uses `VideoEnhance_SamplePixel()` from libvideoenhance.so
 - Samples individual RGB pixels from the active video stream
 - **NOT blocked by Samsung firmware** (unlike official capture APIs)
 - Slower than full-frame capture, but proven to work on Tizen 8.0+
-- See commit: [922ffed](https://github.com/iceteaSA/HyperTizen/commit/922ffed)
 
 **Performance Characteristics:**
 - Must sample pixels individually (no batch/frame operations)
 - Suitable for ambient lighting applications
 - Works on Samsung TVs running Tizen 8.0+ firmware
-
-This breakthrough demonstrates that screen capture IS possible on Tizen 8+, despite Samsung's API restrictions.
 
 ---
 
