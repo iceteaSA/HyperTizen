@@ -1,5 +1,5 @@
 // WebSocket client for HyperTizen Control Center
-// Handles dual WebSocket connections: control (8086) and logs (45678)
+// Handles dual WebSocket connections: control (8087) and logs (45678)
 
 let controlWS = null;
 let logsWS = null;
@@ -46,7 +46,7 @@ window.initializeApp = function(ip) {
 // ============================================================================
 
 function connectControlWS() {
-    const url = `ws://${deviceIP}:8086`;
+    const url = `ws://${deviceIP}:8087`;
     addLog('Info', `Connecting to control WebSocket at ${url}...`);
     updateStatus('connectionStatus', 'Connecting...');
 
