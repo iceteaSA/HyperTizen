@@ -3,6 +3,18 @@
 ### Color up your Tizen TV with HyperTizen!
 HyperTizen is a Hyperion / HyperHDR capturer for Tizen TVs.
 
+---
+
+## ⚠️ Honest Disclaimer
+
+This project **doesn't actually work yet** (or may only partially work). It started with [someone else's excellent work](https://github.com/reisxd/HyperTizen), and most of the "development" was done by burning through way too many AI credits. There's a good chance that half the code is complete gibberish that just *looks* technical. Use at your own risk, and lower your expectations accordingly.
+
+If you somehow find this useful, or just want to support questionable AI-driven development practices:
+
+**[☕ Buy me a coffee](https://ko-fi.com/H2H719VB0U)**
+
+---
+
 <p align="center">
     <a href="https://discord.gg/m2P7v8Y2qR">
        <picture>

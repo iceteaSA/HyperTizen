@@ -24,7 +24,8 @@ const Events = {
     PauseCapture: 8,
     ResumeCapture: 9,
     GetStatus: 10,
-    StatusResult: 11
+    StatusResult: 11,
+    RestartService: 12
 };
 
 // Initialize the application
@@ -321,6 +322,11 @@ function handleStatusResult(data) {
         updateCaptureState(false);
     }
 
+    // Update active server highlight if provided
+    if (data.activeServerUrl) {
+        updateActiveServerHighlight(data.activeServerUrl);
+    }
+
     // Log last error if present
     if (data.lastError && data.lastError !== 'None') {
         addLog('Warning', `Last error: ${data.lastError}`);
@@ -392,50 +398,13 @@ function stopCapture() {
 }
 
 function restartService() {
-    addLog('Info', 'Restarting service...');
-
+    addLog('Info', 'Requesting service restart...');
     try {
-        // Stop capture first
-        stopCapture();
-
-        // Use Tizen API to restart the service
-        setTimeout(() => {
-            try {
-                tizen.application.kill('io.gh.reisxd.HyperTizen',
-                    function() {
-                        addLog('Info', 'Service stopped, restarting...');
-                        setTimeout(() => {
-                            tizen.application.launch(
-                                'io.gh.reisxd.HyperTizen',
-                                function() {
-                                    addLog('Info', 'Service restarted successfully');
-                                },
-                                function(err) {
-                                    addLog('Error', `Failed to restart service: ${err.message}`);
-                                }
-                            );
-                        }, 1000);
-                    },
-                    function(err) {
-                        addLog('Warning', `Failed to stop service: ${err.message}`);
-                        // Try to launch anyway
-                        tizen.application.launch(
-                            'io.gh.reisxd.HyperTizen',
-                            function() {
-                                addLog('Info', 'Service launched');
-                            },
-                            function(err) {
-                                addLog('Error', `Failed to launch service: ${err.message}`);
-                            }
-                        );
-                    }
-                );
-            } catch (err) {
-                addLog('Error', `Restart failed: ${err.message}`);
-            }
-        }, 500);
+        // Send restart command to backend service
+        send({ Event: Events.RestartService });
+        addLog('Info', 'Restart command sent. Service will restart momentarily...');
     } catch (err) {
-        addLog('Error', `Failed to restart service: ${err.message}`);
+        addLog('Error', `Failed to send restart command: ${err.message}`);
     }
 }
 
@@ -497,6 +466,41 @@ function setRainbowBorder(active) {
         } else {
             rainbowBorder.classList.remove('active');
         }
+    }
+}
+
+function updateActiveServerHighlight(activeServerUrl) {
+    // Remove "active" class from all device items
+    const deviceItems = document.querySelectorAll('.device-item');
+    deviceItems.forEach(item => {
+        item.classList.remove('active');
+        const badge = item.querySelector('.active-badge');
+        if (badge) {
+            badge.remove();
+        }
+    });
+
+    // Add "active" class and badge to the matching device
+    if (activeServerUrl) {
+        deviceItems.forEach(item => {
+            const itemUrl = item.getAttribute('data-url');
+            if (itemUrl === activeServerUrl) {
+                item.classList.add('active');
+
+                // Add visual badge to indicate this is the active server
+                const badge = document.createElement('span');
+                badge.className = 'active-badge';
+                badge.textContent = '● ACTIVE';
+                badge.style.cssText = 'color: #4caf50; font-weight: bold; margin-left: 10px; font-size: 20px;';
+
+                const nameElement = item.querySelector('.device-name');
+                if (nameElement && !item.querySelector('.active-badge')) {
+                    nameElement.appendChild(badge);
+                }
+
+                addLog('Debug', `Active server highlighted: ${activeServerUrl}`);
+            }
+        });
     }
 }
 

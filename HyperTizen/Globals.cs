@@ -30,13 +30,46 @@ namespace HyperTizen
         }
         public void SetConfig()
         {
+            // First, try to use the stored rpcServer preference (user's selection from UI)
+            if (Preference.Contains("rpcServer"))
+            {
+                string rpcServer = Preference.Get<string>("rpcServer");
+                if (!string.IsNullOrEmpty(rpcServer))
+                {
+                    // Parse ws://ip:port format
+                    try
+                    {
+                        var uri = new Uri(rpcServer.Replace("ws://", "http://").Replace("wss://", "https://"));
+                        ServerIp = uri.Host;
+                        ServerPort = uri.Port;
+                        Helper.Log.Write(Helper.eLogType.Info,
+                            $"Config: Using saved server {ServerIp}:{ServerPort} from preferences");
+
+                        // Safe parsing of enabled preference with fallback to false
+                        string enabledPref = Preference.Contains("enabled") ? Preference.Get<string>("enabled") : "false";
+                        Enabled = bool.TryParse(enabledPref, out bool enabledResult) && enabledResult;
+                        Helper.Log.Write(Helper.eLogType.Info, $"Loaded enabled setting: {Enabled}");
+
+                        Width = 3840/8;
+                        Height = 2160/8;
+                        return; // Successfully loaded from preferences
+                    }
+                    catch (Exception ex)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning,
+                            $"Failed to parse saved rpcServer '{rpcServer}': {ex.Message}. Falling back to SSDP discovery.");
+                    }
+                }
+            }
+
+            // Fallback to SSDP discovery if no saved preference or parsing failed
             Helper.Log.Write(Helper.eLogType.Info, "SSDP: Starting discovery...");
-            
+
             (string ip, int port) = Helper.SsdpDiscovery.GetHyperIpAndPort();
-            
+
             if (string.IsNullOrEmpty(ip) || port <= 0)
             {
-                Helper.Log.Write(Helper.eLogType.Error, 
+                Helper.Log.Write(Helper.eLogType.Error,
                     "SSDP FAILED: No HyperHDR found. Check network!");
                 // Set defaults or leave as null for validation later
                 ServerIp = null;
@@ -44,7 +77,7 @@ namespace HyperTizen
             }
             else
             {
-                Helper.Log.Write(Helper.eLogType.Info, 
+                Helper.Log.Write(Helper.eLogType.Info,
                     $"SSDP OK: Found {ip}:{port}");
                 ServerIp = ip;
                 ServerPort = port;
