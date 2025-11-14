@@ -65,8 +65,11 @@ namespace HyperTizen
                     $"TCP: Connecting to {Globals.Instance.ServerIp}:{Globals.Instance.ServerPort}");
 
                 client = new TcpClient(Globals.Instance.ServerIp, Globals.Instance.ServerPort);
-                
-                Helper.Log.Write(Helper.eLogType.Info, "TCP: Socket created");
+
+                // Disable Nagle's algorithm to prevent buffering delays
+                client.NoDelay = true;
+
+                Helper.Log.Write(Helper.eLogType.Info, "TCP: Socket created (NoDelay=true)");
                 
                 if (client == null || !client.Connected)
                 {
@@ -100,10 +103,20 @@ namespace HyperTizen
                 header[2] = (byte)((registrationMessage.Length >> 8) & 0xFF);
                 header[3] = (byte)((registrationMessage.Length) & 0xFF);
                 
+                // Log the exact bytes being sent for debugging
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"TCP: Header bytes (length={registrationMessage.Length}): {BitConverter.ToString(header)}");
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"TCP: Message bytes: {BitConverter.ToString(registrationMessage)}");
+
                 stream.Write(header, 0, header.Length);
                 stream.Write(registrationMessage, 0, registrationMessage.Length);
-                
-                Helper.Log.Write(Helper.eLogType.Info, "TCP: Data sent, waiting for reply...");
+
+                // CRITICAL FIX: Flush the stream to ensure data is actually sent!
+                // Without this, data stays in buffer and HyperHDR never receives it
+                stream.Flush();
+
+                Helper.Log.Write(Helper.eLogType.Info, "TCP: Data sent and flushed, waiting for reply...");
                 
                 ReadRegisterReply();
                 
@@ -294,18 +307,32 @@ namespace HyperTizen
 
             var originOffset = builder.CreateString("HyperTizen");
 
+            Helper.Log.Write(Helper.eLogType.Debug,
+                $"CreateRegistrationMessage: Building Register with origin='HyperTizen', priority=123");
+
             Register.StartRegister(builder);
             Register.AddPriority(builder, 123);
             Register.AddOrigin(builder, originOffset);
             var registerOffset = Register.EndRegister(builder);
+
+            Helper.Log.Write(Helper.eLogType.Debug,
+                $"CreateRegistrationMessage: Register offset={registerOffset.Value}");
 
             Request.StartRequest(builder);
             Request.AddCommandType(builder, Command.Register);
             Request.AddCommand(builder, registerOffset.Value);
             var requestOffset = Request.EndRequest(builder);
 
+            Helper.Log.Write(Helper.eLogType.Debug,
+                $"CreateRegistrationMessage: Request offset={requestOffset.Value}");
+
             builder.Finish(requestOffset.Value);
-            return builder.SizedByteArray();
+            byte[] message = builder.SizedByteArray();
+
+            Helper.Log.Write(Helper.eLogType.Debug,
+                $"CreateRegistrationMessage: Generated {message.Length} byte message");
+
+            return message;
         }
 
         public static void ReadRegisterReply()
@@ -320,21 +347,32 @@ namespace HyperTizen
 
                 Helper.Log.Write(Helper.eLogType.Info, "ReadRegisterReply: Waiting for server reply...");
 
+                // Log stream status for debugging
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"ReadRegisterReply: Stream readable={stream.CanRead}, writable={stream.CanWrite}, dataAvailable={stream.DataAvailable}");
+
                 // Set read timeout to prevent infinite blocking
                 stream.ReadTimeout = 5000; // 5 second timeout
 
                 byte[] buffer = new byte[1024];
                 int bytesRead = stream.Read(buffer, 0, buffer.Length);
-                
+
                 if (bytesRead > 0)
                 {
                     Helper.Log.Write(Helper.eLogType.Info, $"ReadRegisterReply: Got {bytesRead} bytes");
-                    
+
                     byte[] replyData = new byte[bytesRead];
                     Array.Copy(buffer, replyData, bytesRead);
 
+                    // Log raw reply bytes for debugging
+                    Helper.Log.Write(Helper.eLogType.Debug,
+                        $"ReadRegisterReply: Raw bytes: {BitConverter.ToString(replyData)}");
+
                     Reply reply = ParseReply(replyData);
-                    
+
+                    Helper.Log.Write(Helper.eLogType.Debug,
+                        $"ReadRegisterReply: Parsed - Registered={reply.Registered}, Video={reply.Video}");
+
                     if (reply.Registered > 0)
                     {
                         Helper.Log.Write(Helper.eLogType.Info, "ReadRegisterReply: REGISTERED OK!");
@@ -351,12 +389,23 @@ namespace HyperTizen
             }
             catch (System.IO.IOException ex)
             {
-                Helper.Log.Write(Helper.eLogType.Error, $"ReadRegisterReply TIMEOUT: {ex.Message}");
+                // Log stream state at timeout
+                string streamState = stream != null ?
+                    $"CanRead={stream.CanRead}, CanWrite={stream.CanWrite}, DataAvail={stream.DataAvailable}" :
+                    "stream is null";
+
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"ReadRegisterReply TIMEOUT: {ex.Message}");
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"ReadRegisterReply TIMEOUT: Stream state at timeout: {streamState}");
                 DisconnectClient();
             }
             catch (Exception ex)
             {
-                Helper.Log.Write(Helper.eLogType.Error, $"ReadRegisterReply ERROR: {ex.Message}");
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"ReadRegisterReply ERROR: {ex.GetType().Name}: {ex.Message}");
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"ReadRegisterReply ERROR: Stack trace: {ex.StackTrace}");
                 DisconnectClient();
             }
         }
