@@ -50,7 +50,7 @@ namespace HyperTizen
                 ServerPort = port;
             }
 
-            Enabled = true;//bool.Parse(Preference.Get<string>("enabled"));
+            Enabled = bool.Parse(Preference.Get<string>("enabled"));
             Width = 3840/8;
             Height = 2160/8;
         }

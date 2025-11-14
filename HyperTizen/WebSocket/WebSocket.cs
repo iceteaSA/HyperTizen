@@ -16,6 +16,8 @@ namespace HyperTizen.WebSocket
     public class WSServer
     {
         private HttpListener _httpListener;
+        private List<System.Net.WebSockets.WebSocket> _connectedClients = new List<System.Net.WebSockets.WebSocket>();
+        private readonly object _clientsLock = new object();
         private List<string> usnList = new List<string>()
         {
             "urn:hyperion-project.org:device:basic:1",
@@ -49,17 +51,34 @@ namespace HyperTizen.WebSocket
 
         private async Task HandleWebSocketAsync(System.Net.WebSockets.WebSocket webSocket)
         {
-            var buffer = new byte[1024 * 4];
-            var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-
-            while (result.MessageType != WebSocketMessageType.Close)
+            // Add client to connected list
+            lock (_clientsLock)
             {
-                var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                await OnMessageAsync(webSocket, message);
-                result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                _connectedClients.Add(webSocket);
             }
 
-            await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None);
+            try
+            {
+                var buffer = new byte[1024 * 4];
+                var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+
+                while (result.MessageType != WebSocketMessageType.Close)
+                {
+                    var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                    await OnMessageAsync(webSocket, message);
+                    result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                }
+
+                await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None);
+            }
+            finally
+            {
+                // Remove client from connected list
+                lock (_clientsLock)
+                {
+                    _connectedClients.Remove(webSocket);
+                }
+            }
         }
 
         protected async Task OnMessageAsync(System.Net.WebSockets.WebSocket webSocket, string message)
@@ -141,6 +160,33 @@ namespace HyperTizen.WebSocket
             await webSocket.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, CancellationToken.None);
         }
 
+        private async Task BroadcastStatusUpdate(string status, string message)
+        {
+            string statusEvent = JsonConvert.SerializeObject(new StatusUpdateEvent(status, message));
+            var buffer = Encoding.UTF8.GetBytes(statusEvent);
+
+            List<System.Net.WebSockets.WebSocket> clients;
+            lock (_clientsLock)
+            {
+                clients = new List<System.Net.WebSockets.WebSocket>(_connectedClients);
+            }
+
+            foreach (var client in clients)
+            {
+                try
+                {
+                    if (client.State == WebSocketState.Open)
+                    {
+                        await client.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, CancellationToken.None);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, $"Failed to send status update to client: {ex.Message}");
+                }
+            }
+        }
+
         void SetConfiguration(SetConfigEvent setConfigEvent)
         {
             switch (setConfigEvent.key)
@@ -157,9 +203,19 @@ namespace HyperTizen.WebSocket
                         if (!App.Configuration.Enabled && value)
                         {
                             App.Configuration.Enabled = value;
+                            Globals.Instance.Enabled = value;
                             Task.Run(() => App.client.Start());
+                            _ = BroadcastStatusUpdate("capturing", "Screen capture started");
                         }
-                        else App.Configuration.Enabled = value;
+                        else
+                        {
+                            App.Configuration.Enabled = value;
+                            Globals.Instance.Enabled = value;
+                            if (!value)
+                            {
+                                _ = BroadcastStatusUpdate("stopped", "Screen capture stopped");
+                            }
+                        }
                         break;
                     }
             }
