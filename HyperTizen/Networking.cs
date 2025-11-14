@@ -97,19 +97,11 @@ namespace HyperTizen
 
                 Helper.Log.Write(Helper.eLogType.Info, $"TCP: Sending {registrationMessage.Length} bytes...");
 
-                var header = new byte[4];
-                header[0] = (byte)((registrationMessage.Length >> 24) & 0xFF);
-                header[1] = (byte)((registrationMessage.Length >> 16) & 0xFF);
-                header[2] = (byte)((registrationMessage.Length >> 8) & 0xFF);
-                header[3] = (byte)((registrationMessage.Length) & 0xFF);
-                
+                // Message already includes 4-byte little-endian size prefix from FinishSizePrefixed
                 // Log the exact bytes being sent for debugging
                 Helper.Log.Write(Helper.eLogType.Debug,
-                    $"TCP: Header bytes (length={registrationMessage.Length}): {BitConverter.ToString(header)}");
-                Helper.Log.Write(Helper.eLogType.Debug,
-                    $"TCP: Message bytes: {BitConverter.ToString(registrationMessage)}");
+                    $"TCP: Message bytes (with size prefix): {BitConverter.ToString(registrationMessage)}");
 
-                stream.Write(header, 0, header.Length);
                 stream.Write(registrationMessage, 0, registrationMessage.Length);
 
                 // CRITICAL FIX: Flush the stream to ensure data is actually sent!
@@ -253,7 +245,8 @@ namespace HyperTizen
             Request.AddCommand(builder, imageOffset.Value);
             var requestOffset = Request.EndRequest(builder);
 
-            builder.Finish(requestOffset.Value);
+            // Use FinishSizePrefixed to include the 4-byte little-endian size prefix
+            Request.FinishSizePrefixedRequestBuffer(builder, requestOffset);
             return builder.SizedByteArray();
         }
 
@@ -326,11 +319,13 @@ namespace HyperTizen
             Helper.Log.Write(Helper.eLogType.Debug,
                 $"CreateRegistrationMessage: Request offset={requestOffset.Value}");
 
-            builder.Finish(requestOffset.Value);
+            // Use FinishSizePrefixed to include the 4-byte little-endian size prefix
+            // This is the correct FlatBuffers protocol format
+            Request.FinishSizePrefixedRequestBuffer(builder, requestOffset);
             byte[] message = builder.SizedByteArray();
 
             Helper.Log.Write(Helper.eLogType.Debug,
-                $"CreateRegistrationMessage: Generated {message.Length} byte message");
+                $"CreateRegistrationMessage: Generated {message.Length} byte message (with size prefix)");
 
             return message;
         }
@@ -449,22 +444,13 @@ namespace HyperTizen
             {
                 if (client == null || !client.Connected || stream == null)
                     return;
-                {
 
-                    var header = new byte[4];
-                    header[0] = (byte)((message.Length >> 24) & 0xFF);
-                    header[1] = (byte)((message.Length >> 16) & 0xFF);
-                    header[2] = (byte)((message.Length >> 8) & 0xFF);
-                    header[3] = (byte)((message.Length) & 0xFF);
-                    await stream.WriteAsync(header, 0, header.Length);
-
-                    Helper.Log.Write(Helper.eLogType.Info, "SendMessageAndReceiveReply: message.Length; " + message.Length);
-                    await stream.WriteAsync(message, 0, message.Length);
-                    await stream.FlushAsync();
-                    Helper.Log.Write(Helper.eLogType.Info, "SendMessageAndReceiveReply: Data sent");
-                    _ = ReadImageReply();
-
-                }
+                // Message already includes 4-byte little-endian size prefix from FinishSizePrefixed
+                Helper.Log.Write(Helper.eLogType.Info, "SendMessageAndReceiveReply: message.Length; " + message.Length);
+                await stream.WriteAsync(message, 0, message.Length);
+                await stream.FlushAsync();
+                Helper.Log.Write(Helper.eLogType.Info, "SendMessageAndReceiveReply: Data sent");
+                _ = ReadImageReply();
             }
             catch (Exception ex)
             {
