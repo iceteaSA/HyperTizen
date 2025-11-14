@@ -18,13 +18,35 @@ namespace HyperTizen
 
         public static void DisconnectClient()
         {
-            if (stream != null)
+            try
             {
-                stream.Flush();
-                stream.Close(500);
+                if (stream != null)
+                {
+                    stream.Flush();
+                    stream.Close(500);
+                }
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Warning, $"DisconnectClient: Stream close error: {ex.Message}");
             }
 
-            client.Close();
+            try
+            {
+                if (client != null)
+                {
+                    client.Close();
+                }
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Warning, $"DisconnectClient: Client close error: {ex.Message}");
+            }
+
+            // CRITICAL FIX: Null out references to prevent race conditions
+            stream = null;
+            client = null;
+            Helper.Log.Write(Helper.eLogType.Info, "DisconnectClient: Client and stream nulled");
         }
 
         public static void SendRegister()
@@ -103,11 +125,50 @@ namespace HyperTizen
 
         public static async Task SendImageAsync(byte[] yData, byte[] uvData, int width, int height)
         {
-            if (client == null || !client.Connected || stream == null)
+            // ENHANCED NULL SAFETY: Check client validity before proceeding
+            try
+            {
+                if (client == null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: client is null");
+                    return;
+                }
+
+                if (client.Client == null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: client.Client is null");
+                    return;
+                }
+
+                if (!client.Connected)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: client not connected");
+                    return;
+                }
+
+                if (stream == null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: stream is null");
+                    return;
+                }
+            }
+            catch (NullReferenceException ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"SendImageAsync: NullRef during validation: {ex.Message}");
                 return;
+            }
+            catch (ObjectDisposedException ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"SendImageAsync: Object disposed during validation: {ex.Message}");
+                return;
+            }
+
             byte[] message = CreateFlatBufferMessage(yData, uvData, width, height);
             if (message == null)
+            {
+                Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: CreateFlatBufferMessage returned null");
                 return;
+            }
 
             var watchFPS = System.Diagnostics.Stopwatch.StartNew();
             _ = SendMessageAndReceiveReplyAsync(message);
@@ -116,8 +177,44 @@ namespace HyperTizen
         }
         static byte[] CreateFlatBufferMessage(byte[] yData, byte[] uvData, int width, int height)
         {
-            if (client == null || !client.Connected || stream == null)
+            // ENHANCED NULL SAFETY: Detailed checks with logging
+            try
+            {
+                if (client == null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "CreateFlatBufferMessage: client is null");
+                    return null;
+                }
+
+                if (client.Client == null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "CreateFlatBufferMessage: client.Client is null");
+                    return null;
+                }
+
+                if (!client.Connected)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "CreateFlatBufferMessage: client not connected");
+                    return null;
+                }
+
+                if (stream == null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "CreateFlatBufferMessage: stream is null");
+                    return null;
+                }
+            }
+            catch (NullReferenceException ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"CreateFlatBufferMessage: NullRef during validation: {ex.Message}");
                 return null;
+            }
+            catch (ObjectDisposedException ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"CreateFlatBufferMessage: Object disposed: {ex.Message}");
+                return null;
+            }
+
             var builder = new FlatBufferBuilder(yData.Length + uvData.Length + 100);
 
             var yVector = NV12Image.CreateDataYVector(builder, yData);
@@ -155,8 +252,43 @@ namespace HyperTizen
 
         public static byte[] CreateRegistrationMessage()
         {
-            if (client == null || !client.Connected || stream == null)
+            // ENHANCED NULL SAFETY: Detailed checks with logging
+            try
+            {
+                if (client == null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "CreateRegistrationMessage: client is null");
+                    return null;
+                }
+
+                if (client.Client == null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "CreateRegistrationMessage: client.Client is null");
+                    return null;
+                }
+
+                if (!client.Connected)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "CreateRegistrationMessage: client not connected");
+                    return null;
+                }
+
+                if (stream == null)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "CreateRegistrationMessage: stream is null");
+                    return null;
+                }
+            }
+            catch (NullReferenceException ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"CreateRegistrationMessage: NullRef during validation: {ex.Message}");
                 return null;
+            }
+            catch (ObjectDisposedException ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"CreateRegistrationMessage: Object disposed: {ex.Message}");
+                return null;
+            }
 
             var builder = new FlatBufferBuilder(256); //TODO:Check how to calculate correctly
 

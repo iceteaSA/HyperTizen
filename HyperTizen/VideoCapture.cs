@@ -176,7 +176,22 @@ namespace HyperTizen
                     throw new Exception("Sanity check Error");
 
                 Helper.Log.Write(Helper.eLogType.Info, "DoCapture: NV12ySize: " + managedArrayY.Length);
-                _ = Networking.SendImageAsync(managedArrayY, managedArrayUV, Globals.Instance.Width, Globals.Instance.Height);
+
+                // ENHANCED NULL SAFETY: Wrap network call in try-catch
+                try
+                {
+                    _ = Networking.SendImageAsync(managedArrayY, managedArrayUV, Globals.Instance.Width, Globals.Instance.Height);
+                }
+                catch (NullReferenceException ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, $"DoCapture: NullRef in SendImageAsync: {ex.Message}\nStack: {ex.StackTrace}");
+                    throw; // Re-throw to be caught by capture loop
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, $"DoCapture: Error in SendImageAsync: {ex.GetType().Name}: {ex.Message}");
+                    throw; // Re-throw to be caught by capture loop
+                }
                 return;
             }
 
@@ -231,7 +246,22 @@ namespace HyperTizen
                         Globals.Instance.Width, Globals.Instance.Height);
 
                     isRunning = true;
-                    _ = Networking.SendImageAsync(managedArrayY, managedArrayUV, Globals.Instance.Width, Globals.Instance.Height);
+
+                    // ENHANCED NULL SAFETY: Wrap network call in try-catch
+                    try
+                    {
+                        _ = Networking.SendImageAsync(managedArrayY, managedArrayUV, Globals.Instance.Width, Globals.Instance.Height);
+                    }
+                    catch (NullReferenceException ex)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Error, $"DoCapture (pixel): NullRef in SendImageAsync: {ex.Message}\nStack: {ex.StackTrace}");
+                        throw; // Re-throw to be caught by capture loop
+                    }
+                    catch (Exception ex)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Error, $"DoCapture (pixel): Error in SendImageAsync: {ex.GetType().Name}: {ex.Message}");
+                        throw; // Re-throw to be caught by capture loop
+                    }
                     return;
                 }
                 else
