@@ -165,36 +165,27 @@ If you get `install failed[118, -12], reason: Check certificate error` error, yo
    **Using the Module Manager:**
    - Press the **[GREEN]** button on your remote to open TizenBrew module manager
    - Navigate to "Add GitHub Module"
-   - Enter the module path (see formats below)
+   - Enter the module path:
 
-   **Module Path Formats:**
-
-   - **Install from main branch** (this fork):
-     ```
-     iceteaSA/HyperTizen/HyperTizenUI
-     ```
-
-   - **Install from a specific branch** (this fork):
-     ```
-     iceteaSA/HyperTizen/HyperTizenUI@branch-name
-     ```
-     Example:
-     ```
-     iceteaSA/HyperTizen/HyperTizenUI@claude/fix-pixel-sampling-capture-01GD3EJ6G87ZtCcxz6bkb8yE
-     ```
-
-   - **Install from original repo** (Tizen 7 only):
-     ```
-     reisxd/HyperTizen/HyperTizenUI
-     ```
-
-   **General Format:**
+   **Install from this fork** (Tizen 8+ with pixel sampling):
    ```
-   <username>/<repository>/<folder-path>[@branch-name]
+   iceteaSA/HyperTizen/HyperTizenUI
    ```
+
+   **Install from original repo** (Tizen 7 only):
+   ```
+   reisxd/HyperTizen/HyperTizenUI
+   ```
+
+   **Format:**
+   ```
+   <username>/<repository>/<folder-path>
+   ```
+   - Installs from the default branch (usually `main`)
    - `username/repository` - GitHub repository owner and name
    - `folder-path` - Path to the app folder within the repository
-   - `@branch-name` - (Optional) Specific branch to install from; defaults to `main` if omitted
+
+   > **Note:** To test development branches, you'll need to manually update files on your TV or wait for the branch to be merged to main.
 
 ### Resigning the Package
 
