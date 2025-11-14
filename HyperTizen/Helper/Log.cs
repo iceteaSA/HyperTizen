@@ -133,7 +133,8 @@ namespace HyperTizen.Helper
 
             // Show notification ONLY for important short messages (not search results!)
             // Skip notifications for SearchLog and progress messages
-            if ((type == eLogType.Error || type == eLogType.Warning || type == eLogType.Info) &&
+            if (Globals.Instance.ShowNotifications &&
+                (type == eLogType.Error || type == eLogType.Warning || type == eLogType.Info) &&
                 message.Length < 100 &&
                 !message.Contains("Search") &&
                 !message.Contains("Command:") &&
