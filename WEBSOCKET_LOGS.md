@@ -17,7 +17,7 @@ HyperTizen now includes a real-time WebSocket log server that broadcasts all log
 
 ### 1. Start HyperTizen on Your TV
 
-The WebSocket server starts automatically when HyperTizen launches on port **8765**.
+The WebSocket server starts automatically when HyperTizen launches on port **45678**.
 
 ### 2. Open the Log Viewer
 
@@ -71,7 +71,7 @@ That's it! Logs will start streaming in real-time.
    - TV and computer must be on the same network
 
 2. **Check firewall**
-   - Port 8765 must be accessible
+   - Port 45678 must be accessible
    - Try temporarily disabling firewall to test
 
 3. **Check HyperTizen is running**
@@ -122,7 +122,7 @@ Logs are color-coded by severity:
 To use a different port, modify `HyperTizen_App.cs`:
 
 ```csharp
-// Change port 8765 to your desired port
+// Change port 45678 to your desired port
 Helper.Log.StartWebSocketServer(9999);
 ```
 
@@ -133,7 +133,7 @@ Then rebuild the app and update the port in the browser UI.
 By default, the WebSocket server listens on all interfaces (`0.0.0.0`).
 
 To access from outside your local network:
-1. Configure port forwarding on your router (port 8765 → TV's IP)
+1. Configure port forwarding on your router (port 45678 → TV's IP)
 2. Use your public IP address in the browser
 3. **Security Warning**: This exposes logs to the internet!
 
@@ -142,7 +142,7 @@ To access from outside your local network:
 You can connect to the WebSocket programmatically:
 
 ```javascript
-const ws = new WebSocket('ws://TV_IP:8765');
+const ws = new WebSocket('ws://TV_IP:45678');
 
 ws.onmessage = (event) => {
     console.log('Log:', event.data);
@@ -158,7 +158,7 @@ Use this for automated testing or log aggregation.
 
 - **Protocol**: RFC 6455 WebSocket
 - **Format**: Text frames (UTF-8)
-- **Port**: 8765 (default)
+- **Port**: 45678 (default)
 - **Handshake**: HTTP Upgrade with Sec-WebSocket-Key
 
 ### Message Format

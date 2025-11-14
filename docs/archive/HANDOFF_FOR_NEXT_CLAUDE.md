@@ -1,4 +1,19 @@
-# Handoff Document - Tizen 8+ Screen Capture Implementation
+# ARCHIVED - Historical Development Notes
+
+**Status:** Outdated as of commit 922ffed (November 2024)
+**Current Status:** VideoEnhance pixel sampling is WORKING on Tizen 8+
+
+This document represents development notes from an earlier session when the project was experiencing crashes and searching for working capture methods. These issues have since been resolved:
+- ✅ VideoEnhance pixel sampling breakthrough (commit 922ffed) - WORKING
+- ✅ Crashes fixed with safe dynamic loading (commits 454236e, db449eb)
+- ✅ Library scanner implemented with blacklist
+- ✅ T8 API complete (but firmware-blocked with -95 error)
+
+For current status, see [README.md](../../README.md) and [AGENTS.md](../../AGENTS.md).
+
+---
+
+# Original Handoff Document - Tizen 8+ Screen Capture Implementation
 
 ## Current Status
 **App is still crashing during library search initialization**. The crash happens right after:
