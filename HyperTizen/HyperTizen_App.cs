@@ -17,8 +17,19 @@ namespace HyperTizen
             Helper.Log.StartWebSocketServer(45678);
 
             // Start WebSocket control server on port 45677 for UI control
-            Task.Run(() => WebSocket.WebSocketServer.StartServerAsync());
-            Helper.Log.Write(Helper.eLogType.Info, "WebSocket control server starting on port 45677");
+            Helper.Log.Write(Helper.eLogType.Info, "Launching control WebSocket server task...");
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await WebSocket.WebSocketServer.StartServerAsync();
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error,
+                        $"Control WebSocket server task crashed: {ex.Message}");
+                }
+            });
 
             // Run diagnostics to check which capture APIs are available
             DiagnosticCapture.RunDiagnostics();
