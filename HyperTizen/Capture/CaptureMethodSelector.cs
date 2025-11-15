@@ -40,10 +40,10 @@ namespace HyperTizen.Capture
         /// Select the best available capture method by testing each in priority order
         /// Returns the first method that passes both IsAvailable() and Test() checks
         /// Cleans up all failed and unused methods automatically
-        /// ASYNC - Uses await Task.Run() to prevent Tizen async context deadlock (matches production Capture pattern)
+        /// SAFE: Already called from background thread via HyperionClient constructor Task.Run()
         /// </summary>
         /// <returns>The best working capture method, or null if all methods fail</returns>
-        public async Task<ICaptureMethod> SelectBestMethodAsync()
+        public ICaptureMethod SelectBestMethod()
         {
             // Check cache outside lock
             if (_hasSelectedMethod)
@@ -83,27 +83,25 @@ namespace HyperTizen.Capture
                     Helper.Log.Write(Helper.eLogType.Info,
                         $"CaptureMethodSelector: {method.Name} - Availability check PASSED");
 
-                    // Step 2: Real capture test using await Task.Run() (same pattern as production Capture - HyperionClient.cs:379-384)
+                    // Step 2: Real capture test (direct call - safe because HyperionClient.Start() already runs in Task.Run())
                     Helper.Log.Write(Helper.eLogType.Info,
                         $"CaptureMethodSelector: {method.Name} - Running capture test...");
 
                     bool testPassed = false;
 
-                    // CRITICAL: Use await Task.Run() to prevent Tizen async context deadlock
-                    // This matches the production Capture() pattern
-                    await Task.Run(() =>
+                    try
                     {
-                        try
-                        {
-                            testPassed = method.Test();
-                        }
-                        catch (Exception ex)
-                        {
-                            Helper.Log.Write(Helper.eLogType.Error,
-                                $"CaptureMethodSelector: {method.Name} - Test threw exception: {ex.Message}");
-                            testPassed = false;
-                        }
-                    });
+                        // Direct call - no Task.Run() to avoid thread pool saturation
+                        // HyperionClient constructor already does Task.Run(() => Start()),
+                        // so we're already on a background thread
+                        testPassed = method.Test();
+                    }
+                    catch (Exception ex)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Error,
+                            $"CaptureMethodSelector: {method.Name} - Test threw exception: {ex.Message}");
+                        testPassed = false;
+                    }
 
                     if (!testPassed)
                     {
