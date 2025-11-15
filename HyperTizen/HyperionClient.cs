@@ -18,6 +18,7 @@ using System.IO;
 using Tizen.Messaging.Messages;
 using System.Linq.Expressions;
 using Tizen.Applications.Notifications;
+using HyperTizen.Capture;
 
 namespace HyperTizen
 {
@@ -53,6 +54,10 @@ namespace HyperTizen
         private readonly object _pauseLock = new object();
         private ServiceState _serviceState = ServiceState.Idle;
         private readonly object _stateLock = new object();
+
+        // Capture architecture fields
+        private ICaptureMethod _selectedCaptureMethod;
+        private CaptureMethodSelector _captureSelector;
 
         // Capture statistics
         private long _framesCaptured = 0;
@@ -96,6 +101,8 @@ namespace HyperTizen
                     return;
                 }
 
+                // STEP 1: Service startup
+                Helper.Log.Write(Helper.eLogType.Info, "=== STEP 1: Service startup ===");
                 State = ServiceState.Starting;
                 _isRunning = true;
                 _startTime = DateTime.Now;
@@ -112,6 +119,9 @@ namespace HyperTizen
                 // Changed to false for normal operation - set to true only for debugging
                 const bool DIAGNOSTIC_MODE = false;
 
+                // STEP 2: Logging/control WebSocket startup
+                // STEP 3: SSDP scans
+                Helper.Log.Write(Helper.eLogType.Info, "=== STEP 2 & 3: WebSocket + SSDP scans ===");
                 Globals.Instance.SetConfig();
 
                 // Log the discovered configuration
@@ -135,75 +145,59 @@ namespace HyperTizen
                         "DIAGNOSTIC MODE ACTIVE - Will pause after initialization");
                 }
 
-                Helper.Log.Write(Helper.eLogType.Info, "Initializing VideoCapture...");
+                // STEP 5: Test each capture method to find best one
+                Helper.Log.Write(Helper.eLogType.Info, "=== STEP 5: Testing capture methods ===");
 
                 try
                 {
-                    VideoCapture.InitCapture();
-                    Helper.Log.Write(Helper.eLogType.Info, "VideoCapture initialized successfully!");
-                }
-                catch (DllNotFoundException dllEx)
-                {
-                    Helper.Log.Write(Helper.eLogType.Error,
-                        $"DLL NOT FOUND: {dllEx.Message} - Check Tizen version compatibility");
+                    _captureSelector = new CaptureMethodSelector();
+                    _selectedCaptureMethod = _captureSelector.SelectBestMethod();
 
-                    if (DIAGNOSTIC_MODE)
+                    if (_selectedCaptureMethod == null)
                     {
-                        Helper.Log.Write(Helper.eLogType.Warning,
-                            "DIAGNOSTIC MODE: Continuing despite error...");
+                        Helper.Log.Write(Helper.eLogType.Error,
+                            "CAPTURE METHOD SELECTION FAILED: No working capture methods found!");
+
+                        if (!DIAGNOSTIC_MODE)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Error,
+                                "STARTUP ABORTED: Cannot proceed without a working capture method");
+                            return;
+                        }
+                        else
+                        {
+                            Helper.Log.Write(Helper.eLogType.Warning,
+                                "DIAGNOSTIC MODE: Continuing despite no capture method...");
+                        }
                     }
                     else
                     {
-                        return;
-                    }
-                }
-                catch (NullReferenceException nullEx)
-                {
-                    Helper.Log.Write(Helper.eLogType.Error,
-                        $"NULL POINTER: SecVideoCapture SDK initialization failed - {nullEx.Message}");
-
-                    if (DIAGNOSTIC_MODE)
-                    {
-                        Helper.Log.Write(Helper.eLogType.Warning,
-                            "DIAGNOSTIC MODE: Continuing despite error...");
-                    }
-                    else
-                    {
-                        return;
-                    }
-                }
-                catch (OutOfMemoryException memEx)
-                {
-                    Helper.Log.Write(Helper.eLogType.Error,
-                        $"OUT OF MEMORY: Cannot allocate capture buffers - {memEx.Message}");
-
-                    if (DIAGNOSTIC_MODE)
-                    {
-                        Helper.Log.Write(Helper.eLogType.Warning,
-                            "DIAGNOSTIC MODE: Continuing despite error...");
-                    }
-                    else
-                    {
-                        return;
+                        Helper.Log.Write(Helper.eLogType.Info,
+                            $"CAPTURE METHOD SELECTED: {_selectedCaptureMethod.Name}");
                     }
                 }
                 catch (Exception ex)
                 {
                     Helper.Log.Write(Helper.eLogType.Error,
-                        $"INIT FAILED: {ex.GetType().Name}: {ex.Message}");
+                        $"CAPTURE METHOD SELECTION ERROR: {ex.GetType().Name}: {ex.Message}");
 
-                    if (DIAGNOSTIC_MODE)
+                    if (!DIAGNOSTIC_MODE)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Error,
+                            "STARTUP ABORTED: Exception during capture method selection");
+                        return;
+                    }
+                    else
                     {
                         Helper.Log.Write(Helper.eLogType.Warning,
                             "DIAGNOSTIC MODE: Continuing despite error...");
                     }
-                    else
-                    {
-                        return;
-                    }
                 }
 
-                // DIAGNOSTIC MODE: Pause for 10 minutes to allow log inspection
+                Helper.Log.Write(Helper.eLogType.Info, "=== STEP 6: Cleanup tests (automatic) ===");
+                Helper.Log.Write(Helper.eLogType.Info, "=== STEP 7: Initialize best method (complete) ===");
+
+                // STEP 4: DIAGNOSTIC MODE - Gather diagnostic info
                 if (DIAGNOSTIC_MODE)
                 {
                     Helper.Log.Write(Helper.eLogType.Warning,
@@ -217,30 +211,24 @@ namespace HyperTizen
                     Helper.Log.Write(Helper.eLogType.Warning,
                         "======================");
 
-                    // TEST SCREEN CAPTURE (if Tizen 8+)
+                    // Log capture method selection results
+                    Helper.Log.Write(Helper.eLogType.Info, "");
+                    Helper.Log.Write(Helper.eLogType.Info, "DIAGNOSTIC: Capture Method Selection Results:");
+                    if (_selectedCaptureMethod != null)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info,
+                            $"Selected Method: {_selectedCaptureMethod.Name} (Type: {_selectedCaptureMethod.Type})");
+                    }
+                    else
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning,
+                            "No capture method was selected - all methods failed");
+                    }
+                    Helper.Log.Write(Helper.eLogType.Info, "");
+
+                    // SCAN FOR ALTERNATIVES - Look for workarounds and alternative libraries
                     if (SDK.SystemInfo.TizenVersionMajor >= 8)
                     {
-                        Helper.Log.Write(Helper.eLogType.Info, "");
-                        Helper.Log.Write(Helper.eLogType.Info, "Running screen capture test...");
-                        try
-                        {
-                            bool testPassed = SDK.SecVideoCaptureT8.TestCapture();
-                            if (testPassed)
-                            {
-                                Helper.Log.Write(Helper.eLogType.Info, "🎉 SCREEN CAPTURE TEST PASSED!");
-                            }
-                            else
-                            {
-                                Helper.Log.Write(Helper.eLogType.Warning, "⚠️ Screen capture test did not pass - check logs above");
-                            }
-                        }
-                        catch (Exception testEx)
-                        {
-                            Helper.Log.Write(Helper.eLogType.Error, $"Screen capture test exception: {testEx.Message}");
-                        }
-                        Helper.Log.Write(Helper.eLogType.Info, "");
-
-                        // SCAN FOR ALTERNATIVES - Look for workarounds and alternative libraries
                         Helper.Log.Write(Helper.eLogType.Info, "Scanning for alternative capture methods...");
                         try
                         {
@@ -310,12 +298,14 @@ namespace HyperTizen
                     return;
                 }
 
-                Helper.Log.Write(Helper.eLogType.Info, "Starting main capture loop...");
+                // STEP 8: Start capture loop
+                Helper.Log.Write(Helper.eLogType.Info, "=== STEP 8: Starting main capture loop ===");
                 State = ServiceState.Capturing;
 
                 int consecutiveErrors = 0;
                 const int maxConsecutiveErrors = 10;
 
+                // STEP 10: Continue until stopped
                 while (!_cancellationTokenSource.Token.IsCancellationRequested && Globals.Instance.Enabled)
                 {
                     try
@@ -366,22 +356,78 @@ namespace HyperTizen
 
                         if(isConnected)
                         {
-                            var watchFPS = System.Diagnostics.Stopwatch.StartNew();
-                            await Task.Run(() =>VideoCapture.DoCapture()); //VideoCapture.DoDummyCapture();
-                            watchFPS.Stop();
-                            var elapsedFPS = 1 / watchFPS.Elapsed.TotalSeconds;
-                            Helper.Log.Write(Helper.eLogType.Performance, "Capture FPS: " + elapsedFPS.ToString("F1"));
-
-                            // Update statistics
-                            _framesCaptured++;
-                            _fpsHistory.Add(elapsedFPS);
-                            if (_fpsHistory.Count > 100) // Keep last 100 samples
+                            // Validate capture method is available
+                            if (_selectedCaptureMethod == null)
                             {
-                                _fpsHistory.RemoveAt(0);
+                                Helper.Log.Write(Helper.eLogType.Error,
+                                    "Cannot capture: No capture method selected!");
+                                await Task.Delay(2000, _cancellationTokenSource.Token);
+                                continue;
                             }
 
-                            // Reset error counter on success
-                            consecutiveErrors = 0;
+                            var watchFPS = System.Diagnostics.Stopwatch.StartNew();
+
+                            // Capture using selected method
+                            CaptureResult captureResult = null;
+                            await Task.Run(() =>
+                            {
+                                captureResult = _selectedCaptureMethod.Capture(
+                                    Globals.Instance.Width,
+                                    Globals.Instance.Height);
+                            });
+
+                            watchFPS.Stop();
+
+                            // Process capture result
+                            if (captureResult != null && captureResult.Success)
+                            {
+                                var elapsedFPS = 1 / watchFPS.Elapsed.TotalSeconds;
+                                Helper.Log.Write(Helper.eLogType.Performance, "Capture FPS: " + elapsedFPS.ToString("F1"));
+
+                                // STEP 9: Initiate FlatBuffers connection (send frame)
+                                try
+                                {
+                                    _ = Networking.SendImageAsync(
+                                        captureResult.YData,
+                                        captureResult.UVData,
+                                        captureResult.Width,
+                                        captureResult.Height);
+                                }
+                                catch (NullReferenceException ex)
+                                {
+                                    Helper.Log.Write(Helper.eLogType.Error,
+                                        $"Capture loop: NullRef in SendImageAsync: {ex.Message}");
+                                    throw; // Re-throw to be caught by outer catch
+                                }
+                                catch (Exception ex)
+                                {
+                                    Helper.Log.Write(Helper.eLogType.Error,
+                                        $"Capture loop: Error in SendImageAsync: {ex.GetType().Name}: {ex.Message}");
+                                    throw;
+                                }
+
+                                // Update statistics
+                                _framesCaptured++;
+                                _fpsHistory.Add(elapsedFPS);
+                                if (_fpsHistory.Count > 100) // Keep last 100 samples
+                                {
+                                    _fpsHistory.RemoveAt(0);
+                                }
+
+                                // Reset error counter on success
+                                consecutiveErrors = 0;
+                            }
+                            else
+                            {
+                                // Capture failed
+                                string errorMsg = captureResult?.ErrorMessage ?? "Unknown capture error";
+                                Helper.Log.Write(Helper.eLogType.Warning,
+                                    $"Capture failed: {errorMsg}");
+                                consecutiveErrors++;
+
+                                // Brief delay before retry
+                                await Task.Delay(500, _cancellationTokenSource.Token);
+                            }
                         }
                         else
                         {
@@ -530,6 +576,40 @@ namespace HyperTizen
                 {
                     Helper.Log.Write(Helper.eLogType.Warning,
                         $"Error closing network connection: {ex.Message}");
+                }
+            }
+
+            // Cleanup capture method resources
+            if (_selectedCaptureMethod != null)
+            {
+                try
+                {
+                    Helper.Log.Write(Helper.eLogType.Info, "Cleaning up capture method...");
+                    _selectedCaptureMethod.Cleanup();
+                    _selectedCaptureMethod = null;
+                    Helper.Log.Write(Helper.eLogType.Info, "Capture method cleaned up");
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning,
+                        $"Error cleaning up capture method: {ex.Message}");
+                }
+            }
+
+            // Cleanup capture selector
+            if (_captureSelector != null)
+            {
+                try
+                {
+                    Helper.Log.Write(Helper.eLogType.Info, "Resetting capture selector...");
+                    _captureSelector.Reset();
+                    _captureSelector = null;
+                    Helper.Log.Write(Helper.eLogType.Info, "Capture selector reset");
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning,
+                        $"Error resetting capture selector: {ex.Message}");
                 }
             }
 

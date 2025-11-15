@@ -110,15 +110,10 @@ namespace HyperTizen
 
         private void LoadEnabledPreference()
         {
-            // FORCE ENABLED TO TRUE - Ignore cached preferences for testing
-            // TODO: Remove this override once capture loop is stable
-            Enabled = true;
-            Helper.Log.Write(Helper.eLogType.Info, $"Enabled FORCED to: {Enabled} (ignoring cached preference)");
-
-            // Original logic (commented out for testing):
-            // string enabledPref = Preference.Contains("enabled") ? Preference.Get<string>("enabled") : "true";
-            // Enabled = bool.TryParse(enabledPref, out bool enabledResult) && enabledResult;
-            // Helper.Log.Write(Helper.eLogType.Info, $"Loaded enabled setting: {Enabled}");
+            // Load enabled setting from preferences, defaulting to true if not set
+            string enabledPref = Preference.Contains("enabled") ? Preference.Get<string>("enabled") : "true";
+            Enabled = bool.TryParse(enabledPref, out bool enabledResult) && enabledResult;
+            Helper.Log.Write(Helper.eLogType.Info, $"Loaded enabled setting from preferences: {Enabled}");
         }
 
         public string ServerIp; //IP of hyperhdr server
