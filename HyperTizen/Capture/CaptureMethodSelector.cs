@@ -54,7 +54,8 @@ namespace HyperTizen.Capture
             }
 
             Helper.Log.Write(Helper.eLogType.Info, "CaptureMethodSelector: Starting capture method selection");
-            Helper.Log.Write(Helper.eLogType.Info, "CaptureMethodSelector: Testing methods in priority order (T8SDK → T7SDK → PixelSampling)");
+            Helper.Log.Write(Helper.eLogType.Info, $"Current Tizen version: {SDK.SystemInfo.TizenVersionMajor}.{SDK.SystemInfo.TizenVersionMinor}");
+            Helper.Log.Write(Helper.eLogType.Info, "Testing methods in priority order (T8SDK → T7SDK → PixelSampling)");
 
             // Sort methods by priority (highest to lowest)
             var sortedMethods = _methods.OrderByDescending(m => m.Type).ToList();

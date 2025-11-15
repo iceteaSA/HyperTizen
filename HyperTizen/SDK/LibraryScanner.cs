@@ -295,6 +295,18 @@ namespace HyperTizen.SDK
         {
             Helper.Log.Write(Helper.eLogType.Info, "--- Checking for T7 API (libsec-video-capture.so.0) ---");
 
+            // SAFETY: Skip on Tizen 8+ - library doesn't exist and DllImport is disabled
+            // T7 API (libsec-video-capture.so.0) only exists on Tizen 7 and below
+            // The DllImport for T7CaptureScreenVideo is commented out for safety
+            if (SDK.SystemInfo.TizenVersionMajor >= 8)
+            {
+                Helper.Log.Write(Helper.eLogType.Info,
+                    "  ⏩ Skipping T7 API test (Tizen 8+ detected - libsec-video-capture.so.0 not available)");
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    "  T7 API only exists on Tizen 7 and below - DllImport commented out for safety");
+                return;
+            }
+
             string[] possiblePaths = new string[] {
                 "/usr/lib/libsec-video-capture.so.0",
                 "/usr/lib/libsec-video-capture.so",
@@ -321,11 +333,37 @@ namespace HyperTizen.SDK
             Helper.Log.Write(Helper.eLogType.Debug, "  ✗ T7 API not found");
         }
 
-        [DllImport("/usr/lib/libsec-video-capture.so.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen_video_only")]
-        private static extern int T7CaptureScreenVideo(int w, int h, ref SecVideoCapture.Info_t pInfo);
+        // DISABLED: T7 API DllImport - causes crashes on Tizen 8+!
+        // WARNING: libsec-video-capture.so.0 does NOT exist on Tizen 8+ TVs
+        // Calling this will cause DllNotFoundException or native crash
+        // USAGE: Only test T7 API on Tizen 7 and below (see version check in TestT7Capture)
+        //
+        // [DllImport("/usr/lib/libsec-video-capture.so.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen_video_only")]
+        // private static extern int T7CaptureScreenVideo(int w, int h, ref SecVideoCapture.Info_t pInfo);
 
         private static void TestT7Capture()
         {
+            // SAFETY: Skip T7 API test on Tizen 8+ (library doesn't exist)
+            if (SystemInfo.TizenVersionMajor >= 8)
+            {
+                Helper.Log.Write(Helper.eLogType.Info, "  Skipping T7 API test on Tizen 8+ (library not available)");
+                Helper.Log.Write(Helper.eLogType.Debug, "  T7 API (libsec-video-capture.so.0) only exists on Tizen 7 and below");
+                return;
+            }
+
+            // DISABLED: T7 API test code - requires T7CaptureScreenVideo DllImport (commented out above)
+            // This test would only work on Tizen 7 and below
+            // On Tizen 8+, the version check above prevents this code from executing
+            //
+            // To re-enable on Tizen 7:
+            // 1. Uncomment T7CaptureScreenVideo DllImport above
+            // 2. Uncomment this test code block
+            // 3. Ensure version check remains in place
+            //
+            Helper.Log.Write(Helper.eLogType.Debug, "  T7 API test disabled (DllImport commented out for safety)");
+            Helper.Log.Write(Helper.eLogType.Info, "  To test T7 API on Tizen 7, uncomment T7CaptureScreenVideo DllImport");
+
+            /*
             try
             {
                 // Allocate small test buffers
@@ -368,6 +406,7 @@ namespace HyperTizen.SDK
             {
                 Helper.Log.Write(Helper.eLogType.Debug, $"  T7 test failed: {ex.Message}");
             }
+            */
         }
 
         private static void TryFrameBuffer()

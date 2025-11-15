@@ -32,20 +32,69 @@ namespace HyperTizen.WebSocket
 
         public async Task StartAsync()
         {
-            _httpListener.Start();
-            while (true)
+            try
             {
-                var httpContext = await _httpListener.GetContextAsync();
-                if (httpContext.Request.IsWebSocketRequest)
+                Helper.Log.Write(Helper.eLogType.Info,
+                    "Starting HttpListener on http://*:45677/");
+
+                _httpListener.Start();
+
+                Helper.Log.Write(Helper.eLogType.Info,
+                    "Control WebSocket server started successfully on port 45677");
+
+                while (true)
                 {
-                    var wsContext = await httpContext.AcceptWebSocketAsync(null);
-                    _ = HandleWebSocketAsync(wsContext.WebSocket);
+                    var httpContext = await _httpListener.GetContextAsync();
+                    if (httpContext.Request.IsWebSocketRequest)
+                    {
+                        var wsContext = await httpContext.AcceptWebSocketAsync(null);
+                        _ = HandleWebSocketAsync(wsContext.WebSocket);
+                    }
+                    else
+                    {
+                        httpContext.Response.StatusCode = 400;
+                        httpContext.Response.Close();
+                    }
                 }
-                else
+            }
+            catch (HttpListenerException ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"HttpListener failed to start on port 45677: ErrorCode={ex.ErrorCode}, Message={ex.Message}");
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"This may be a Tizen 9 permission issue. Check manifest privileges.");
+
+                // Show TV notification so user can see the error even without logs
+                try
                 {
-                    httpContext.Response.StatusCode = 400;
-                    httpContext.Response.Close();
+                    var notif = new Tizen.Applications.Notifications.Notification
+                    {
+                        Title = "WebSocket Error",
+                        Content = $"Control server failed: Code {ex.ErrorCode}",
+                        Count = 1
+                    };
+                    Tizen.Applications.Notifications.NotificationManager.Post(notif);
                 }
+                catch { /* Ignore notification errors */ }
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error,
+                    $"Control WebSocket server failed to start: {ex.GetType().Name} - {ex.Message}");
+                Helper.Log.Write(Helper.eLogType.Debug, $"StackTrace: {ex.StackTrace}");
+
+                // Show TV notification so user can see the error even without logs
+                try
+                {
+                    var notif = new Tizen.Applications.Notifications.Notification
+                    {
+                        Title = "WebSocket Error",
+                        Content = $"Control server: {ex.Message}",
+                        Count = 1
+                    };
+                    Tizen.Applications.Notifications.NotificationManager.Post(notif);
+                }
+                catch { /* Ignore notification errors */ }
             }
         }
 
@@ -393,7 +442,8 @@ namespace HyperTizen.WebSocket
     {
         public static async Task StartServerAsync()
         {
-            var wsServer = new WSServer("http://+:45677/");
+            // Use http://*: instead of http://+: for better Tizen 9 compatibility
+            var wsServer = new WSServer("http://*:45677/");
             await wsServer.StartAsync();
         }
     }

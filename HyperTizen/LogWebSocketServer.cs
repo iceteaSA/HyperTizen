@@ -67,7 +67,20 @@ namespace HyperTizen
             }
             catch (Exception ex)
             {
-                Helper.Log.Write(Helper.eLogType.Error, $"Failed to start WebSocket server: {ex.Message}");
+                Helper.Log.Write(Helper.eLogType.Error, $"Failed to start WebSocket log server on port {port}: {ex.Message}");
+
+                // Show TV notification so user can see the error even without logs
+                try
+                {
+                    var notif = new Tizen.Applications.Notifications.Notification
+                    {
+                        Title = "WebSocket Log Server Error",
+                        Content = $"Port {port} failed: {ex.Message}",
+                        Count = 1
+                    };
+                    Tizen.Applications.Notifications.NotificationManager.Post(notif);
+                }
+                catch { /* Ignore notification errors */ }
             }
         }
 
