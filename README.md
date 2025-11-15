@@ -95,6 +95,66 @@ The log viewer (`logs.html`) is served automatically when HyperTizen is running.
 
 ---
 
+## Browser-Based Control Panel
+
+In addition to logs, HyperTizen provides a **full control panel** accessible from any browser on your network.
+
+### Accessing the Control Panel
+
+1. **Start HyperTizen** on your TV
+2. **Open your browser** on any device on the same network
+3. **Open the control panel:**
+   - **Option 1**: Navigate to `http://<YOUR_TV_IP>:45678/controls.html`
+   - **Option 2**: Download `controls.html` from this repository and open it locally, then enter your TV's IP
+
+### Control Panel Features
+
+The control panel (`controls.html`) provides the same functionality as the HyperTizenUI but through a standard browser:
+
+**Service Control:**
+- ▶️ Start/Stop capture
+- ⏸️ Pause/Resume capture
+- 🔄 Restart HyperTizen service
+- 🌈 Rainbow border indicator when capturing
+
+**SSDP Device Management:**
+- 🔍 Scan for Hyperion/HyperHDR devices on your network
+- ✓ Select and apply devices
+- View device details (name, URL)
+
+**Live Monitoring:**
+- 📊 Real-time service status (state, FPS, frames captured, errors)
+- 📋 Live log streaming (same as logs.html)
+- ⏱️ Uptime and connection status
+- 🔌 Dual WebSocket status indicators (control + logs)
+
+**WebSocket Connections:**
+- Port **45677**: Control WebSocket (send commands)
+- Port **45678**: Logs WebSocket (receive logs)
+- Auto-reconnect with exponential backoff
+- Persistent settings (saves TV IP in browser)
+
+### Example
+
+```
+http://192.168.1.100:45678/controls.html
+```
+
+Or open `controls.html` locally and enter:
+```
+TV IP: 192.168.1.100
+Control Port: 45677
+Logs Port: 45678
+```
+
+The control panel is perfect for:
+- Managing HyperTizen from your phone/tablet/computer
+- Testing capture without accessing the TV UI
+- Monitoring service status during troubleshooting
+- Selecting Hyperion/HyperHDR servers without using the TV remote
+
+---
+
 ## What Works (and What Doesn't)
 
 ### Working on Tizen 8.0+
