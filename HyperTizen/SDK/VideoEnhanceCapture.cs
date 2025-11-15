@@ -122,6 +122,9 @@ namespace HyperTizen.SDK
                     // Set positions for this batch (up to ScreenCapturePoints at once)
                     int batchSize = Math.Min(_condition.ScreenCapturePoints, points.Length - i);
 
+                    Helper.Log.Write(Helper.eLogType.Info,
+                        $"VideoEnhance: Processing batch {(i / batchSize) + 1} of {(points.Length + batchSize - 1) / batchSize} ({batchSize} points)");
+
                     for (int j = 0; j < batchSize; j++)
                     {
                         int pointIndex = i + j;
@@ -148,15 +151,26 @@ namespace HyperTizen.SDK
 
                     if (sleepTime > 0)
                     {
+                        Helper.Log.Write(Helper.eLogType.Info, $"VideoEnhance: Sleeping {sleepTime}ms as required by API...");
                         Thread.Sleep(sleepTime);
-                        Helper.Log.Write(Helper.eLogType.Debug, $"VideoEnhance: Slept {sleepTime}ms as required by API");
+                        Helper.Log.Write(Helper.eLogType.Info, $"VideoEnhance: Sleep complete, reading {batchSize} pixel colors...");
+                    }
+                    else
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, $"VideoEnhance: Reading {batchSize} pixel colors (no sleep required)...");
                     }
 
                     // Read pixel colors for this batch
                     for (int k = 0; k < batchSize; k++)
                     {
+                        Helper.Log.Write(Helper.eLogType.Info,
+                            $"VideoEnhance: Reading pixel {k + 1}/{batchSize}...");
+
                         Color color;
                         int result = MeasurePixel(k, out color);
+
+                        Helper.Log.Write(Helper.eLogType.Debug,
+                            $"VideoEnhance: Pixel {k + 1} returned code {result}");
 
                         if (result < 0)
                         {

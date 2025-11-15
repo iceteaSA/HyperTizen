@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace HyperTizen.Capture
 {
@@ -83,15 +85,45 @@ namespace HyperTizen.Capture
                         Helper.Log.Write(Helper.eLogType.Info,
                             $"CaptureMethodSelector: {method.Name} - Availability check PASSED");
 
-                        // Step 2: Real capture test
+                        // Step 2: Real capture test with timeout protection
                         Helper.Log.Write(Helper.eLogType.Info,
-                            $"CaptureMethodSelector: {method.Name} - Running capture test...");
+                            $"CaptureMethodSelector: {method.Name} - Running capture test (30s timeout)...");
 
-                        bool testPassed = method.Test();
-                        if (!testPassed)
+                        bool testPassed = false;
+                        bool timedOut = false;
+
+                        try
                         {
-                            Helper.Log.Write(Helper.eLogType.Warning,
-                                $"CaptureMethodSelector: {method.Name} - Capture test FAILED");
+                            // Run test with timeout protection to prevent indefinite blocking
+                            var testTask = Task.Run(() => method.Test());
+
+                            // Wait up to 30 seconds for test to complete
+                            if (testTask.Wait(TimeSpan.FromSeconds(30)))
+                            {
+                                testPassed = testTask.Result;
+                            }
+                            else
+                            {
+                                timedOut = true;
+                                Helper.Log.Write(Helper.eLogType.Error,
+                                    $"CaptureMethodSelector: {method.Name} - Capture test TIMEOUT (30s exceeded)");
+                                Helper.Log.Write(Helper.eLogType.Error,
+                                    $"CaptureMethodSelector: {method.Name} - Test appears to be hanging in native code");
+                            }
+                        }
+                        catch (AggregateException ae)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Error,
+                                $"CaptureMethodSelector: {method.Name} - Test threw exception: {ae.InnerException?.Message ?? ae.Message}");
+                        }
+
+                        if (timedOut || !testPassed)
+                        {
+                            if (!timedOut)
+                            {
+                                Helper.Log.Write(Helper.eLogType.Warning,
+                                    $"CaptureMethodSelector: {method.Name} - Capture test FAILED");
+                            }
                             failedMethods.Add(method);
                             continue;
                         }
