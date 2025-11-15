@@ -110,15 +110,15 @@ namespace HyperTizen
 
         private void LoadEnabledPreference()
         {
-            // FORCE ENABLED TO TRUE - Ignore cached preferences for testing
-            // TODO: Remove this override once capture loop is stable
-            Enabled = true;
-            Helper.Log.Write(Helper.eLogType.Info, $"Enabled FORCED to: {Enabled} (ignoring cached preference)");
+            // Load enabled setting from preferences, defaulting to true if not set
+            string enabledPref = Preference.Contains("enabled") ? Preference.Get<string>("enabled") : "true";
+            Enabled = bool.TryParse(enabledPref, out bool enabledResult) && enabledResult;
+            Helper.Log.Write(Helper.eLogType.Info, $"Loaded enabled setting from preferences: {Enabled}");
 
-            // Original logic (commented out for testing):
-            // string enabledPref = Preference.Contains("enabled") ? Preference.Get<string>("enabled") : "true";
-            // Enabled = bool.TryParse(enabledPref, out bool enabledResult) && enabledResult;
-            // Helper.Log.Write(Helper.eLogType.Info, $"Loaded enabled setting: {Enabled}");
+            // Load diagnostic mode setting from preferences, defaulting to false if not set
+            string diagnosticPref = Preference.Contains("diagnosticMode") ? Preference.Get<string>("diagnosticMode") : "false";
+            DiagnosticMode = bool.TryParse(diagnosticPref, out bool diagnosticResult) && diagnosticResult;
+            Helper.Log.Write(Helper.eLogType.Info, $"Loaded diagnosticMode setting from preferences: {DiagnosticMode}");
         }
 
         public string ServerIp; //IP of hyperhdr server
@@ -126,6 +126,7 @@ namespace HyperTizen
         public int Width; //Capture Width
         public int Height; //Capture Height
         public bool Enabled; //Is the service enabled
+        public bool DiagnosticMode; //Enable diagnostic mode (pauses for 10 minutes after initialization)
         public bool ShowNotifications = false; //Show notification popups on TV (default: false, use new UI instead)
     }
 }

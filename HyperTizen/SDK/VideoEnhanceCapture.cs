@@ -143,14 +143,13 @@ namespace HyperTizen.SDK
                         }
                     }
 
-                    // OPTIMIZATION ATTEMPT: Reduce sleep time
-                    // Try using half the required sleep time to improve frame rate
-                    // If this causes issues, increase back to _condition.SleepMS
-                    int sleepTime = Math.Max(1, _condition.SleepMS / 2); // Use half sleep, minimum 1ms
+                    // Use API-specified sleep time (don't optimize - hardware requires this timing)
+                    int sleepTime = _condition.SleepMS;
 
                     if (sleepTime > 0)
                     {
                         Thread.Sleep(sleepTime);
+                        Helper.Log.Write(Helper.eLogType.Debug, $"VideoEnhance: Slept {sleepTime}ms as required by API");
                     }
 
                     // Read pixel colors for this batch

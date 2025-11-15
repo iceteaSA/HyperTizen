@@ -344,7 +344,18 @@ namespace HyperTizen.WebSocket
                             if (newState)
                             {
                                 Helper.Log.Write(Helper.eLogType.Info, "Starting screen capture");
-                                Task.Run(() => App.client.Start());
+                                Task.Run(async () =>
+                                {
+                                    try
+                                    {
+                                        await App.client.Start();
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Helper.Log.Write(Helper.eLogType.Error,
+                                            $"Unhandled exception in Start(): {ex.Message}");
+                                    }
+                                });
                             }
                             else
                             {

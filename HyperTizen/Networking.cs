@@ -13,40 +13,56 @@ namespace HyperTizen
 {
     public static class Networking
     {
-        public static TcpClient client;
-        public static NetworkStream stream;
+        private static readonly object _lock = new object();
+        private static TcpClient _client;
+        private static NetworkStream _stream;
+
+        public static TcpClient client
+        {
+            get { lock (_lock) { return _client; } }
+            set { lock (_lock) { _client = value; } }
+        }
+
+        public static NetworkStream stream
+        {
+            get { lock (_lock) { return _stream; } }
+            set { lock (_lock) { _stream = value; } }
+        }
 
         public static void DisconnectClient()
         {
-            try
+            lock (_lock)
             {
-                if (stream != null)
+                try
                 {
-                    stream.Flush();
-                    stream.Close(500);
+                    if (_stream != null)
+                    {
+                        _stream.Flush();
+                        _stream.Close(500);
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Warning, $"DisconnectClient: Stream close error: {ex.Message}");
-            }
-
-            try
-            {
-                if (client != null)
+                catch (Exception ex)
                 {
-                    client.Close();
+                    Helper.Log.Write(Helper.eLogType.Warning, $"DisconnectClient: Stream close error: {ex.Message}");
                 }
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Warning, $"DisconnectClient: Client close error: {ex.Message}");
-            }
 
-            // CRITICAL FIX: Null out references to prevent race conditions
-            stream = null;
-            client = null;
-            Helper.Log.Write(Helper.eLogType.Info, "DisconnectClient: Client and stream nulled");
+                try
+                {
+                    if (_client != null)
+                    {
+                        _client.Close();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, $"DisconnectClient: Client close error: {ex.Message}");
+                }
+
+                // CRITICAL FIX: Null out references to prevent race conditions
+                _stream = null;
+                _client = null;
+                Helper.Log.Write(Helper.eLogType.Info, "DisconnectClient: Client and stream nulled");
+            }
         }
 
         public static void SendRegister()
@@ -61,63 +77,66 @@ namespace HyperTizen
                     return;
                 }
 
-                Helper.Log.Write(Helper.eLogType.Info, 
+                Helper.Log.Write(Helper.eLogType.Info,
                     $"TCP: Connecting to {Globals.Instance.ServerIp}:{Globals.Instance.ServerPort}");
 
-                client = new TcpClient(Globals.Instance.ServerIp, Globals.Instance.ServerPort);
-
-                // Disable Nagle's algorithm to prevent buffering delays
-                client.NoDelay = true;
-
-                Helper.Log.Write(Helper.eLogType.Info, "TCP: Socket created (NoDelay=true)");
-                
-                if (client == null || !client.Connected)
+                lock (_lock)
                 {
-                    Helper.Log.Write(Helper.eLogType.Error, "TCP FAILED: Client null/not connected");
-                    return;
+                    _client = new TcpClient(Globals.Instance.ServerIp, Globals.Instance.ServerPort);
+
+                    // Disable Nagle's algorithm to prevent buffering delays
+                    _client.NoDelay = true;
+
+                    Helper.Log.Write(Helper.eLogType.Info, "TCP: Socket created (NoDelay=true)");
+
+                    if (_client == null || !_client.Connected)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Error, "TCP FAILED: Client null/not connected");
+                        return;
+                    }
+
+                    Helper.Log.Write(Helper.eLogType.Info, "TCP: Connected! Getting stream...");
+
+                    _stream = _client.GetStream();
+                    if (_stream == null)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Error, "TCP FAILED: No stream");
+                        return;
+                    }
+
+                    Helper.Log.Write(Helper.eLogType.Info, "TCP: Stream OK, creating FlatBuffer msg...");
+
+                    byte[] registrationMessage = Networking.CreateRegistrationMessage();
+                    if (registrationMessage == null)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Error, "TCP FAILED: No FlatBuffer message");
+                        return;
+                    }
+
+                    // HyperHDR expects BIG-ENDIAN 4-byte size prefix (not FlatBuffers standard little-endian)
+                    var header = new byte[4];
+                    header[0] = (byte)((registrationMessage.Length >> 24) & 0xFF);  // Big-endian
+                    header[1] = (byte)((registrationMessage.Length >> 16) & 0xFF);
+                    header[2] = (byte)((registrationMessage.Length >> 8) & 0xFF);
+                    header[3] = (byte)(registrationMessage.Length & 0xFF);
+
+                    Helper.Log.Write(Helper.eLogType.Info,
+                        $"TCP: Sending {registrationMessage.Length} bytes with big-endian header...");
+                    Helper.Log.Write(Helper.eLogType.Debug,
+                        $"TCP: Header (big-endian size={registrationMessage.Length}): {BitConverter.ToString(header)}");
+                    Helper.Log.Write(Helper.eLogType.Debug,
+                        $"TCP: Message bytes: {BitConverter.ToString(registrationMessage)}");
+
+                    _stream.Write(header, 0, header.Length);
+                    _stream.Write(registrationMessage, 0, registrationMessage.Length);
+
+                    // CRITICAL FIX: Flush the stream to ensure data is actually sent!
+                    // Without this, data stays in buffer and HyperHDR never receives it
+                    _stream.Flush();
+
+                    Helper.Log.Write(Helper.eLogType.Info, "TCP: Data sent and flushed, waiting for reply...");
                 }
 
-                Helper.Log.Write(Helper.eLogType.Info, "TCP: Connected! Getting stream...");
-                
-                stream = Networking.client.GetStream();
-                if (stream == null)
-                {
-                    Helper.Log.Write(Helper.eLogType.Error, "TCP FAILED: No stream");
-                    return;
-                }
-
-                Helper.Log.Write(Helper.eLogType.Info, "TCP: Stream OK, creating FlatBuffer msg...");
-
-                byte[] registrationMessage = Networking.CreateRegistrationMessage();
-                if (registrationMessage == null)
-                {
-                    Helper.Log.Write(Helper.eLogType.Error, "TCP FAILED: No FlatBuffer message");
-                    return;
-                }
-
-                // HyperHDR expects BIG-ENDIAN 4-byte size prefix (not FlatBuffers standard little-endian)
-                var header = new byte[4];
-                header[0] = (byte)((registrationMessage.Length >> 24) & 0xFF);  // Big-endian
-                header[1] = (byte)((registrationMessage.Length >> 16) & 0xFF);
-                header[2] = (byte)((registrationMessage.Length >> 8) & 0xFF);
-                header[3] = (byte)(registrationMessage.Length & 0xFF);
-
-                Helper.Log.Write(Helper.eLogType.Info,
-                    $"TCP: Sending {registrationMessage.Length} bytes with big-endian header...");
-                Helper.Log.Write(Helper.eLogType.Debug,
-                    $"TCP: Header (big-endian size={registrationMessage.Length}): {BitConverter.ToString(header)}");
-                Helper.Log.Write(Helper.eLogType.Debug,
-                    $"TCP: Message bytes: {BitConverter.ToString(registrationMessage)}");
-
-                stream.Write(header, 0, header.Length);
-                stream.Write(registrationMessage, 0, registrationMessage.Length);
-
-                // CRITICAL FIX: Flush the stream to ensure data is actually sent!
-                // Without this, data stays in buffer and HyperHDR never receives it
-                stream.Flush();
-
-                Helper.Log.Write(Helper.eLogType.Info, "TCP: Data sent and flushed, waiting for reply...");
-                
                 ReadRegisterReply();
                 
                 Helper.Log.Write(Helper.eLogType.Info, "TCP OK: Fully registered!");
@@ -144,28 +163,31 @@ namespace HyperTizen
             // ENHANCED NULL SAFETY: Check client validity before proceeding
             try
             {
-                if (client == null)
+                lock (_lock)
                 {
-                    Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: ❌ client is null");
-                    return;
-                }
+                    if (_client == null)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: ❌ client is null");
+                        return;
+                    }
 
-                if (client.Client == null)
-                {
-                    Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: client.Client is null");
-                    return;
-                }
+                    if (_client.Client == null)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: client.Client is null");
+                        return;
+                    }
 
-                if (!client.Connected)
-                {
-                    Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: client not connected");
-                    return;
-                }
+                    if (!_client.Connected)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: client not connected");
+                        return;
+                    }
 
-                if (stream == null)
-                {
-                    Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: stream is null");
-                    return;
+                    if (_stream == null)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "SendImageAsync: stream is null");
+                        return;
+                    }
                 }
             }
             catch (NullReferenceException ex)
@@ -218,28 +240,31 @@ namespace HyperTizen
             // ENHANCED NULL SAFETY: Detailed checks with logging
             try
             {
-                if (client == null)
+                lock (_lock)
                 {
-                    Helper.Log.Write(Helper.eLogType.Warning, "CreateFlatBufferMessage: client is null");
-                    return null;
-                }
+                    if (_client == null)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "CreateFlatBufferMessage: client is null");
+                        return null;
+                    }
 
-                if (client.Client == null)
-                {
-                    Helper.Log.Write(Helper.eLogType.Warning, "CreateFlatBufferMessage: client.Client is null");
-                    return null;
-                }
+                    if (_client.Client == null)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "CreateFlatBufferMessage: client.Client is null");
+                        return null;
+                    }
 
-                if (!client.Connected)
-                {
-                    Helper.Log.Write(Helper.eLogType.Warning, "CreateFlatBufferMessage: client not connected");
-                    return null;
-                }
+                    if (!_client.Connected)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "CreateFlatBufferMessage: client not connected");
+                        return null;
+                    }
 
-                if (stream == null)
-                {
-                    Helper.Log.Write(Helper.eLogType.Warning, "CreateFlatBufferMessage: stream is null");
-                    return null;
+                    if (_stream == null)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "CreateFlatBufferMessage: stream is null");
+                        return null;
+                    }
                 }
             }
             catch (NullReferenceException ex)
@@ -336,28 +361,31 @@ namespace HyperTizen
             // ENHANCED NULL SAFETY: Detailed checks with logging
             try
             {
-                if (client == null)
+                lock (_lock)
                 {
-                    Helper.Log.Write(Helper.eLogType.Warning, "CreateRegistrationMessage: client is null");
-                    return null;
-                }
+                    if (_client == null)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "CreateRegistrationMessage: client is null");
+                        return null;
+                    }
 
-                if (client.Client == null)
-                {
-                    Helper.Log.Write(Helper.eLogType.Warning, "CreateRegistrationMessage: client.Client is null");
-                    return null;
-                }
+                    if (_client.Client == null)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "CreateRegistrationMessage: client.Client is null");
+                        return null;
+                    }
 
-                if (!client.Connected)
-                {
-                    Helper.Log.Write(Helper.eLogType.Warning, "CreateRegistrationMessage: client not connected");
-                    return null;
-                }
+                    if (!_client.Connected)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "CreateRegistrationMessage: client not connected");
+                        return null;
+                    }
 
-                if (stream == null)
-                {
-                    Helper.Log.Write(Helper.eLogType.Warning, "CreateRegistrationMessage: stream is null");
-                    return null;
+                    if (_stream == null)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, "CreateRegistrationMessage: stream is null");
+                        return null;
+                    }
                 }
             }
             catch (NullReferenceException ex)
@@ -409,60 +437,67 @@ namespace HyperTizen
         {
             try
             {
-                if (client == null || !client.Connected || stream == null)
+                lock (_lock)
                 {
-                    Helper.Log.Write(Helper.eLogType.Error, "ReadRegisterReply: No client/stream");
-                    return;
-                }
-
-                Helper.Log.Write(Helper.eLogType.Info, "ReadRegisterReply: Waiting for server reply...");
-
-                // Log stream status for debugging
-                Helper.Log.Write(Helper.eLogType.Debug,
-                    $"ReadRegisterReply: Stream readable={stream.CanRead}, writable={stream.CanWrite}, dataAvailable={stream.DataAvailable}");
-
-                // Set read timeout to prevent infinite blocking
-                stream.ReadTimeout = 5000; // 5 second timeout
-
-                byte[] buffer = new byte[1024];
-                int bytesRead = stream.Read(buffer, 0, buffer.Length);
-
-                if (bytesRead > 0)
-                {
-                    Helper.Log.Write(Helper.eLogType.Info, $"ReadRegisterReply: Got {bytesRead} bytes");
-
-                    byte[] replyData = new byte[bytesRead];
-                    Array.Copy(buffer, replyData, bytesRead);
-
-                    // Log raw reply bytes for debugging
-                    Helper.Log.Write(Helper.eLogType.Debug,
-                        $"ReadRegisterReply: Raw bytes: {BitConverter.ToString(replyData)}");
-
-                    Reply reply = ParseReply(replyData);
-
-                    Helper.Log.Write(Helper.eLogType.Debug,
-                        $"ReadRegisterReply: Parsed - Registered={reply.Registered}, Video={reply.Video}");
-
-                    if (reply.Registered > 0)
+                    if (_client == null || !_client.Connected || _stream == null)
                     {
-                        Helper.Log.Write(Helper.eLogType.Info, "ReadRegisterReply: REGISTERED OK!");
+                        Helper.Log.Write(Helper.eLogType.Error, "ReadRegisterReply: No client/stream");
+                        return;
+                    }
+
+                    Helper.Log.Write(Helper.eLogType.Info, "ReadRegisterReply: Waiting for server reply...");
+
+                    // Log stream status for debugging
+                    Helper.Log.Write(Helper.eLogType.Debug,
+                        $"ReadRegisterReply: Stream readable={_stream.CanRead}, writable={_stream.CanWrite}, dataAvailable={_stream.DataAvailable}");
+
+                    // Set read timeout to prevent infinite blocking
+                    _stream.ReadTimeout = 5000; // 5 second timeout
+
+                    byte[] buffer = new byte[1024];
+                    int bytesRead = _stream.Read(buffer, 0, buffer.Length);
+
+                    if (bytesRead > 0)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Info, $"ReadRegisterReply: Got {bytesRead} bytes");
+
+                        byte[] replyData = new byte[bytesRead];
+                        Array.Copy(buffer, replyData, bytesRead);
+
+                        // Log raw reply bytes for debugging
+                        Helper.Log.Write(Helper.eLogType.Debug,
+                            $"ReadRegisterReply: Raw bytes: {BitConverter.ToString(replyData)}");
+
+                        Reply reply = ParseReply(replyData);
+
+                        Helper.Log.Write(Helper.eLogType.Debug,
+                            $"ReadRegisterReply: Parsed - Registered={reply.Registered}, Video={reply.Video}");
+
+                        if (reply.Registered > 0)
+                        {
+                            Helper.Log.Write(Helper.eLogType.Info, "ReadRegisterReply: REGISTERED OK!");
+                        }
+                        else
+                        {
+                            Helper.Log.Write(Helper.eLogType.Error, $"ReadRegisterReply: NOT registered (code: {reply.Registered})");
+                        }
                     }
                     else
                     {
-                        Helper.Log.Write(Helper.eLogType.Error, $"ReadRegisterReply: NOT registered (code: {reply.Registered})");
+                        Helper.Log.Write(Helper.eLogType.Error, "ReadRegisterReply: No data received");
                     }
-                }
-                else
-                {
-                    Helper.Log.Write(Helper.eLogType.Error, "ReadRegisterReply: No data received");
                 }
             }
             catch (System.IO.IOException ex)
             {
                 // Log stream state at timeout
-                string streamState = stream != null ?
-                    $"CanRead={stream.CanRead}, CanWrite={stream.CanWrite}, DataAvail={stream.DataAvailable}" :
-                    "stream is null";
+                string streamState;
+                lock (_lock)
+                {
+                    streamState = _stream != null ?
+                        $"CanRead={_stream.CanRead}, CanWrite={_stream.CanWrite}, DataAvail={_stream.DataAvailable}" :
+                        "stream is null";
+                }
 
                 Helper.Log.Write(Helper.eLogType.Error,
                     $"ReadRegisterReply TIMEOUT: {ex.Message}");
@@ -482,11 +517,16 @@ namespace HyperTizen
 
         public static async Task ReadImageReply()
         {
-            if (client == null || !client.Connected || stream == null)
-                return;
+            NetworkStream localStream;
+            lock (_lock)
+            {
+                if (_client == null || !_client.Connected || _stream == null)
+                    return;
+                localStream = _stream;
+            }
 
             byte[] buffer = new byte[1024];
-            int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+            int bytesRead = await localStream.ReadAsync(buffer, 0, buffer.Length);
             if (bytesRead > 0)
             {
 
@@ -520,11 +560,16 @@ namespace HyperTizen
                 Helper.Log.Write(Helper.eLogType.Debug,
                     $"  → SendMessageAndReceiveReplyAsync: ENTRY with {message.Length} byte message");
 
-                if (client == null || !client.Connected || stream == null)
+                NetworkStream localStream;
+                lock (_lock)
                 {
-                    Helper.Log.Write(Helper.eLogType.Warning,
-                        $"  → SendMessageAndReceiveReplyAsync: ❌ Connection not ready (client={client != null}, connected={client?.Connected ?? false}, stream={stream != null})");
-                    return;
+                    if (_client == null || !_client.Connected || _stream == null)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning,
+                            $"  → SendMessageAndReceiveReplyAsync: ❌ Connection not ready (client={_client != null}, connected={_client?.Connected ?? false}, stream={_stream != null})");
+                        return;
+                    }
+                    localStream = _stream;
                 }
 
                 // HyperHDR expects BIG-ENDIAN 4-byte size prefix (not FlatBuffers standard little-endian)
@@ -537,9 +582,9 @@ namespace HyperTizen
                 Helper.Log.Write(Helper.eLogType.Debug,
                     $"  → SendMessageAndReceiveReplyAsync: Writing {message.Length} bytes to HyperHDR...");
 
-                await stream.WriteAsync(header, 0, header.Length);
-                await stream.WriteAsync(message, 0, message.Length);
-                await stream.FlushAsync();
+                await localStream.WriteAsync(header, 0, header.Length);
+                await localStream.WriteAsync(message, 0, message.Length);
+                await localStream.FlushAsync();
 
                 Helper.Log.Write(Helper.eLogType.Info,
                     $"  → SendMessageAndReceiveReplyAsync: ✓ Frame sent to HyperHDR ({message.Length} bytes)");
