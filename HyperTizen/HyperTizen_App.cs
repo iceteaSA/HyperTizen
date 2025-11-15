@@ -1,3 +1,4 @@
+using System;
 using Tizen.Applications;
 using Tizen.Applications.Notifications;
 using Tizen.System;
