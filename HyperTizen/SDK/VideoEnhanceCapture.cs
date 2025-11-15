@@ -66,6 +66,13 @@ namespace HyperTizen.SDK
         /// </summary>
         public static bool Initialize()
         {
+            // Skip if already initialized
+            if (_isInitialized)
+            {
+                Helper.Log.Write(Helper.eLogType.Debug, "VideoEnhance: Already initialized, skipping re-initialization");
+                return true;
+            }
+
             try
             {
                 Helper.Log.Write(Helper.eLogType.Info, "VideoEnhance: Initializing pixel sampling capture...");
@@ -163,18 +170,16 @@ namespace HyperTizen.SDK
                     // Read pixel colors for this batch
                     for (int k = 0; k < batchSize; k++)
                     {
-                        Helper.Log.Write(Helper.eLogType.Info,
-                            $"VideoEnhance: Reading pixel {k + 1}/{batchSize}...");
-
                         Color color;
                         int result = MeasurePixel(k, out color);
 
                         Helper.Log.Write(Helper.eLogType.Debug,
-                            $"VideoEnhance: Pixel {k + 1} returned code {result}");
+                            $"VideoEnhance: Pixel {k + 1}/{batchSize} returned code {result}");
 
                         if (result < 0)
                         {
-                            Helper.Log.Write(Helper.eLogType.Warning, $"VideoEnhance: MeasurePixel({k}) failed: {result}");
+                            Helper.Log.Write(Helper.eLogType.Error,
+                                $"VideoEnhance: MeasurePixel({k}) failed with code {result}");
                             return false;
                         }
 
@@ -182,12 +187,16 @@ namespace HyperTizen.SDK
                         if (color.R > 1023 || color.G > 1023 || color.B > 1023 ||
                             color.R < 0 || color.G < 0 || color.B < 0)
                         {
-                            Helper.Log.Write(Helper.eLogType.Warning, $"VideoEnhance: Invalid color RGB({color.R}, {color.G}, {color.B})");
+                            Helper.Log.Write(Helper.eLogType.Error,
+                                $"VideoEnhance: Invalid color RGB({color.R}, {color.G}, {color.B})");
                             return false;
                         }
 
                         colors[i + k] = color;
                     }
+
+                    Helper.Log.Write(Helper.eLogType.Info,
+                        $"VideoEnhance: ✓ Batch complete - read {batchSize} pixel(s) successfully");
 
                     i += batchSize;
                 }
@@ -249,10 +258,16 @@ namespace HyperTizen.SDK
                 return false;
             }
 
-            var points = GetDefaultCapturePoints();
+            // Use minimal test points (4 corners) for faster testing
+            var points = new CapturePoint[] {
+                new CapturePoint(0.1, 0.1),   // Top-left
+                new CapturePoint(0.9, 0.1),   // Top-right
+                new CapturePoint(0.9, 0.9),   // Bottom-right
+                new CapturePoint(0.1, 0.9)    // Bottom-left
+            };
             Color[] colors;
 
-            Helper.Log.Write(Helper.eLogType.Info, $"Capturing {points.Length} sample points...");
+            Helper.Log.Write(Helper.eLogType.Info, $"Testing with {points.Length} corner sample points (minimal test)...");
 
             var startTime = DateTime.Now;
             bool success = CapturePixels(points, out colors);
@@ -260,22 +275,22 @@ namespace HyperTizen.SDK
 
             if (success)
             {
-                Helper.Log.Write(Helper.eLogType.Info, $"✅ VideoEnhance capture WORKS!");
-                Helper.Log.Write(Helper.eLogType.Info, $"Captured {points.Length} points in {elapsed:F1}ms");
-                Helper.Log.Write(Helper.eLogType.Info, $"Frame rate: ~{1000.0 / elapsed:F1} FPS");
+                Helper.Log.Write(Helper.eLogType.Info, $"✅ VideoEnhance capture test PASSED!");
+                Helper.Log.Write(Helper.eLogType.Info, $"Captured {points.Length} test points in {elapsed:F1}ms");
+                Helper.Log.Write(Helper.eLogType.Info, $"Estimated frame rate: ~{1000.0 / elapsed:F1} FPS (for {points.Length} points)");
 
                 Helper.Log.Write(Helper.eLogType.Info, "Sample colors (RGB 10-bit):");
-                for (int i = 0; i < Math.Min(4, colors.Length); i++)
+                for (int i = 0; i < colors.Length; i++)
                 {
-                    Helper.Log.Write(Helper.eLogType.Info, $"  Point {i}: RGB({colors[i].R}, {colors[i].G}, {colors[i].B})");
+                    Helper.Log.Write(Helper.eLogType.Info, $"  Corner {i + 1}: RGB({colors[i].R}, {colors[i].G}, {colors[i].B})");
                 }
 
-                Helper.Log.Write(Helper.eLogType.Info, "⭐⭐⭐ USE VideoEnhance FOR TIZEN 8 SCREEN CAPTURE! ⭐⭐⭐");
+                Helper.Log.Write(Helper.eLogType.Info, "✓ VideoEnhance pixel sampling is WORKING on this Tizen 8+ device");
                 return true;
             }
             else
             {
-                Helper.Log.Write(Helper.eLogType.Error, "VideoEnhance: Capture failed");
+                Helper.Log.Write(Helper.eLogType.Error, "VideoEnhance: Test capture failed");
                 return false;
             }
         }
