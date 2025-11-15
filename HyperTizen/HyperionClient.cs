@@ -68,7 +68,18 @@ namespace HyperTizen
 
         public HyperionClient()
         {
-            Task.Run(() => Start());
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await Start();
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error,
+                        $"Unhandled exception in Start(): {ex.Message}");
+                }
+            });
         }
 
         // Get current service state
@@ -115,10 +126,6 @@ namespace HyperTizen
 
                 Helper.Log.Write(Helper.eLogType.Info, "HyperionClient starting...");
 
-                // DIAGNOSTIC MODE: Set to true to pause for 10 minutes after initialization
-                // Changed to false for normal operation - set to true only for debugging
-                const bool DIAGNOSTIC_MODE = false;
-
                 // STEP 2: Logging/control WebSocket startup
                 // STEP 3: SSDP scans
                 Helper.Log.Write(Helper.eLogType.Info, "=== STEP 2 & 3: WebSocket + SSDP scans ===");
@@ -129,7 +136,7 @@ namespace HyperTizen
                     $"Config: {Globals.Instance.ServerIp ?? "null"}:{Globals.Instance.ServerPort}");
 
                 // In diagnostic mode, skip config validation to allow initialization
-                if (!DIAGNOSTIC_MODE)
+                if (!Globals.Instance.DiagnosticMode)
                 {
                     // Validate configuration before starting loop
                     if (string.IsNullOrEmpty(Globals.Instance.ServerIp) || Globals.Instance.ServerPort <= 0)
@@ -158,7 +165,7 @@ namespace HyperTizen
                         Helper.Log.Write(Helper.eLogType.Error,
                             "CAPTURE METHOD SELECTION FAILED: No working capture methods found!");
 
-                        if (!DIAGNOSTIC_MODE)
+                        if (!Globals.Instance.DiagnosticMode)
                         {
                             Helper.Log.Write(Helper.eLogType.Error,
                                 "STARTUP ABORTED: Cannot proceed without a working capture method");
@@ -181,7 +188,7 @@ namespace HyperTizen
                     Helper.Log.Write(Helper.eLogType.Error,
                         $"CAPTURE METHOD SELECTION ERROR: {ex.GetType().Name}: {ex.Message}");
 
-                    if (!DIAGNOSTIC_MODE)
+                    if (!Globals.Instance.DiagnosticMode)
                     {
                         Helper.Log.Write(Helper.eLogType.Error,
                             "STARTUP ABORTED: Exception during capture method selection");
@@ -198,7 +205,7 @@ namespace HyperTizen
                 Helper.Log.Write(Helper.eLogType.Info, "=== STEP 7: Initialize best method (complete) ===");
 
                 // STEP 4: DIAGNOSTIC MODE - Gather diagnostic info
-                if (DIAGNOSTIC_MODE)
+                if (Globals.Instance.DiagnosticMode)
                 {
                     Helper.Log.Write(Helper.eLogType.Warning,
                         "=== DIAGNOSTIC MODE ===");

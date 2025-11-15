@@ -40,6 +40,8 @@ This is an **experimental fork** of [HyperTizen](https://github.com/reisxd/Hyper
 
 This fork is primarily focused on research and proof-of-concept implementations for Tizen 8+ capture methods. While we have achieved a working breakthrough (see below), the implementation is slower than traditional capture methods and is still being optimized.
 
+**New Capture Architecture:** HyperTizen now uses a systematic `ICaptureMethod` interface with automatic fallback selection. The `CaptureMethodSelector` tests available methods on startup (T8SDK → T7SDK → PixelSampling) and automatically selects the best working method for your TV.
+
 ---
 
 ### VideoEnhance Pixel Sampling (WORKING)

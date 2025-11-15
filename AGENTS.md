@@ -56,35 +56,62 @@ Before making ANY changes, read these files IN THIS ORDER:
 
 ### Capture Strategy Architecture
 
-HyperTizen implements a **three-tier fallback approach**:
+HyperTizen uses a **systematic fallback architecture** with the `ICaptureMethod` interface:
 
 ```
-1. VideoEnhance Pixel Sampling (WORKING on Tizen 8+)
-   ├─ libvideoenhance.so
-   ├─ VideoEnhance_SamplePixel() - samples individual RGB pixels
-   ├─ Slower than frame capture, but NOT blocked
-   └─ See: VideoEnhanceCapture.cs
+Startup Flow:
+1. CaptureMethodSelector tests methods in priority order
+2. First working method is selected and initialized
+3. Failed methods are automatically cleaned up
+4. Single active capture method used for entire session
 
-2. T8 VTable API (BLOCKED by firmware)
+Three Capture Methods (Priority Order):
+1. T8SdkCaptureMethod (BLOCKED by firmware)
    ├─ libvideo-capture.so.0.1.0
    ├─ Complete vtable implementation (Lock → getVideoMainYUV → Unlock)
    ├─ Returns -95 (EOPNOTSUPP) - feature flags disabled by Samsung
-   └─ See: SecVideoCapture.cs
+   └─ See: HyperTizen/Capture/T8SdkCaptureMethod.cs
 
-3. T7 Legacy API (MISSING on Tizen 8+)
+2. T7SdkCaptureMethod (MISSING on Tizen 8+)
    ├─ libsec-video-capture.so.0
    ├─ Old API from Tizen 7.0 and earlier
    ├─ Library doesn't exist on Tizen 8.0+ firmware
-   └─ See: VideoCapture.cs
+   └─ See: HyperTizen/Capture/T7SdkCaptureMethod.cs
+
+3. PixelSamplingCaptureMethod (WORKING on Tizen 8+)
+   ├─ libvideoenhance.so
+   ├─ VideoEnhance_SamplePixel() - samples individual RGB pixels
+   ├─ Slower than frame capture, but NOT blocked
+   └─ See: HyperTizen/Capture/PixelSamplingCaptureMethod.cs
 ```
+
+**10-Step Service Startup:**
+1. Service startup (initialize lifecycle management)
+2. Start WebSocket logging server
+3. Perform SSDP network scan
+4. Diagnostic mode (if enabled via Preferences)
+5. Test each capture method (CaptureMethodSelector)
+6. Clean up failed methods
+7. Initialize best working method
+8. Start capture loop
+9. Initiate FlatBuffers connection (send frames)
+10. Continue until stopped
 
 ### Key Components
 
-- **`HyperTizen/SDK/VideoEnhanceCapture.cs`** - Working pixel sampling method
-- **`HyperTizen/SDK/SecVideoCapture.cs`** - T8 API (blocked but complete)
+**Capture Architecture:**
+- **`HyperTizen/Capture/ICaptureMethod.cs`** - Interface for all capture methods
+- **`HyperTizen/Capture/CaptureMethodSelector.cs`** - Tests and selects best method
+- **`HyperTizen/Capture/CaptureResult.cs`** - Standardized capture result wrapper
+- **`HyperTizen/Capture/T8SdkCaptureMethod.cs`** - T8 API (blocked but complete)
+- **`HyperTizen/Capture/T7SdkCaptureMethod.cs`** - T7 legacy API (missing on T8+)
+- **`HyperTizen/Capture/PixelSamplingCaptureMethod.cs`** - Pixel sampling (WORKING)
+
+**Core Services:**
 - **`HyperTizen/SDK/LibraryScanner.cs`** - Safe library probing with dlopen/dlsym
 - **`HyperTizen/LogWebSocketServer.cs`** - WebSocket log streaming
-- **`HyperTizen/HyperionClient.cs`** - Main application loop + diagnostic mode
+- **`HyperTizen/HyperionClient.cs`** - Main application loop + 10-step startup
+- **`HyperTizen/Preferences.cs`** - Runtime configuration (includes DIAGNOSTIC_MODE)
 - **`logs.html`** - Browser-based real-time log viewer
 
 ### WebSocket Logging Architecture
@@ -102,11 +129,12 @@ The WebSocket server streams all log messages in real-time to any connected brow
 
 ### Diagnostic Mode
 
-Located in `HyperionClient.cs` (controlled by `DIAGNOSTIC_MODE` flag):
+Runtime-configurable via `Preferences.DiagnosticMode`:
 - Pauses app for 10 minutes after initialization
 - Countdown every 60 seconds via TV notifications
 - Allows testing capture methods via WebSocket logs
 - Use this to test changes without app auto-connecting to Hyperion
+- Toggle via preferences UI (no recompilation needed)
 
 ---
 
@@ -390,16 +418,14 @@ The `.agents` file defines specialized agents for different aspects of the proje
 
 ### Diagnostic Mode Testing
 
-**Enable in:** `HyperTizen/HyperionClient.cs`
-```csharp
-const bool DIAGNOSTIC_MODE = true;
-```
+**Enable via:** Preferences UI or `Preferences.DiagnosticMode = true`
 
 **Behavior:**
 - App pauses for 10 minutes after initialization
 - Countdown notifications every 60 seconds
 - Allows testing capture without Hyperion connection
 - Watch WebSocket logs for detailed output
+- Runtime configurable (no recompilation needed)
 
 **Use for:**
 - Testing new capture implementations
@@ -701,9 +727,12 @@ curl http://<TV_IP>:45678
 /home/user/HyperTizen/README.md  (READ FIRST!)
 /home/user/HyperTizen/AGENTS.md
 /home/user/HyperTizen/.agents
-/home/user/HyperTizen/HyperTizen/SDK/VideoEnhanceCapture.cs  (WORKING)
-/home/user/HyperTizen/HyperTizen/SDK/SecVideoCapture.cs  (T8 - BLOCKED)
+/home/user/HyperTizen/HyperTizen/Capture/ICaptureMethod.cs  (Capture interface)
+/home/user/HyperTizen/HyperTizen/Capture/CaptureMethodSelector.cs  (Selection logic)
+/home/user/HyperTizen/HyperTizen/Capture/PixelSamplingCaptureMethod.cs  (WORKING)
+/home/user/HyperTizen/HyperTizen/Capture/T8SdkCaptureMethod.cs  (T8 - BLOCKED)
 /home/user/HyperTizen/HyperTizen/SDK/LibraryScanner.cs
+/home/user/HyperTizen/HyperTizen/HyperionClient.cs  (10-step startup flow)
 /home/user/HyperTizen/logs.html  (WebSocket viewer)
 /home/user/HyperTizen/references/GetCaptureFromTZ.c  (Decompiled reference)
 /home/user/HyperTizen/docs/archive/HANDOFF_FOR_NEXT_CLAUDE.md  (ARCHIVED/OUTDATED)

@@ -1,6 +1,8 @@
-# HyperionClient.cs Refactoring Summary
+# HyperTizen Capture Architecture Refactoring Summary
 
-## Overview
+## Phase 1-2: HyperionClient.cs Refactoring
+
+### Overview
 Successfully refactored `/home/user/HyperTizen/HyperTizen/HyperionClient.cs` to use the new capture architecture with `CaptureMethodSelector` and `ICaptureMethod` interface, following the 10-step startup flow.
 
 ## Changes Made
@@ -298,3 +300,102 @@ if (_captureSelector != null)
 3. Monitor logs for proper 10-step flow execution
 4. Benchmark performance vs. old implementation
 5. Consider deprecating old `VideoCapture` static methods
+
+---
+
+## Phase 3: Runtime Configuration & Code Cleanup
+
+### Overview
+Completed runtime configurability of diagnostic mode and removed legacy dead code from the codebase.
+
+### Changes Made
+
+#### 1. Runtime-Configurable DIAGNOSTIC_MODE (via Preference System)
+
+**Previously:**
+- `DIAGNOSTIC_MODE` was a const bool in `HyperionClient.cs`
+- Required recompilation to toggle diagnostic mode
+- Inflexible for testing and debugging
+
+**Now:**
+- Moved to `Preferences.DiagnosticMode` property
+- Runtime-configurable via preferences UI
+- No recompilation needed to enable/disable diagnostics
+- Persists across app restarts
+
+**Benefits:**
+- Faster debugging workflow
+- Users can toggle diagnostic mode without developer builds
+- Better separation of concerns (configuration vs. logic)
+
+#### 2. Deleted VideoCapture.cs (530 Lines of Dead Code)
+
+**File Removed:** `/home/user/HyperTizen/HyperTizen/SDK/VideoCapture.cs`
+
+**Reason:**
+- Legacy T7 static capture class no longer called anywhere
+- Replaced by new `ICaptureMethod` architecture in Phase 1-2
+- `HyperionClient.cs` now uses `CaptureMethodSelector` and `ICaptureMethod` interface
+- Keeping dead code creates maintenance burden and confusion
+
+**Impact:**
+- Cleaner codebase
+- No functional changes (code was already unused)
+- Reduces potential confusion for future developers
+- T7 capture still available via `T7SdkCaptureMethod.cs`
+
+#### 3. Fixed Critical Fire-and-Forget Error Swallowing (Task 4 - To Be Completed)
+
+**Issue Identified:**
+Two critical locations where exceptions are silently swallowed by fire-and-forget async calls:
+1. `Networking.SendImageAsync()` in capture loop
+2. Background task error handling
+
+**Planned Fix:**
+- Add proper `await` or `.GetAwaiter().GetResult()` for critical paths
+- Implement comprehensive exception logging
+- Ensure errors bubble up for visibility
+
+**Status:** Task 4 (next in queue)
+
+### Architecture Impact
+
+**Before Phase 3:**
+- Diagnostic mode required recompilation
+- 530 lines of unused legacy code in codebase
+- Some async errors silently swallowed
+
+**After Phase 3:**
+- Diagnostic mode toggle at runtime
+- Legacy code removed, cleaner architecture
+- Error handling improvements identified (to be fixed in Task 4)
+
+### Testing Recommendations
+
+1. **Diagnostic Mode Toggle:**
+   - Verify `Preferences.DiagnosticMode` can be toggled via UI
+   - Confirm setting persists across app restarts
+   - Test diagnostic mode still functions correctly (10-minute pause, notifications)
+
+2. **Build Verification:**
+   - Ensure project builds without `VideoCapture.cs`
+   - Verify no references to removed file
+   - Confirm T7 capture still works via `T7SdkCaptureMethod.cs`
+
+3. **Error Handling:**
+   - Monitor logs for any missed exceptions
+   - Prepare for Task 4 error handling improvements
+
+### File Changes
+
+**Modified:**
+- `/home/user/HyperTizen/HyperTizen/HyperionClient.cs` - Uses `Preferences.DiagnosticMode`
+- `/home/user/HyperTizen/HyperTizen/Preferences.cs` - Added `DiagnosticMode` property
+
+**Deleted:**
+- `/home/user/HyperTizen/HyperTizen/SDK/VideoCapture.cs` (530 lines)
+
+**Documentation Updated:**
+- `/home/user/HyperTizen/AGENTS.md` - Updated architecture section
+- `/home/user/HyperTizen/REFACTOR_SUMMARY.md` - Added Phase 3 section
+- `/home/user/HyperTizen/README.md` - Brief architecture mention
