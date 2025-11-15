@@ -44,95 +44,21 @@ namespace HyperTizen.Capture
             if (!IsAvailable())
                 return false;
 
-            try
-            {
-                // Try a test capture at low resolution
-                int testWidth = 480;
-                int testHeight = 270;
-                int ySize = testWidth * testHeight;
-                int uvSize = (testWidth * testHeight) / 2;
-
-                IntPtr testY = Marshal.AllocHGlobal(ySize);
-                IntPtr testUV = Marshal.AllocHGlobal(uvSize);
-
-                SecVideoCapture.Info_t info = new SecVideoCapture.Info_t
-                {
-                    iGivenBufferSize1 = ySize,
-                    iGivenBufferSize2 = uvSize,
-                    pImageY = testY,
-                    pImageUV = testUV
-                };
-
-                int result = SecVideoCaptureT7.CaptureScreenVideo(testWidth, testHeight, ref info);
-
-                Marshal.FreeHGlobal(testY);
-                Marshal.FreeHGlobal(testUV);
-
-                if (result >= 0)
-                {
-                    Helper.Log.Write(Helper.eLogType.Info, $"T7SDK Test: SUCCESS (result={result})");
-                    return true;
-                }
-                else
-                {
-                    Helper.Log.Write(Helper.eLogType.Warning, $"T7SDK Test: FAILED (result={result})");
-                    return false;
-                }
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Error, $"T7SDK Test exception: {ex.Message}");
-                return false;
-            }
+            // T7 SDK methods are disabled on Tizen 8+ (DllImports commented out for safety)
+            // This code path should never execute due to IsAvailable() check above
+            // But we need it to compile, so return false immediately
+            Helper.Log.Write(Helper.eLogType.Error,
+                "T7SDK Test: Cannot test - T7 API methods are disabled (Tizen 8+ only supports T8 API)");
+            return false;
         }
 
         public CaptureResult Capture(int width, int height)
         {
-            try
-            {
-                // Allocate buffers on first capture
-                if (!_buffersAllocated)
-                {
-                    int ySize = width * height;
-                    int uvSize = (width * height) / 2;
-                    _pImageY = Marshal.AllocHGlobal(ySize);
-                    _pImageUV = Marshal.AllocHGlobal(uvSize);
-                    _buffersAllocated = true;
-                }
-
-                // Prepare Info_t structure
-                int ySize2 = width * height;
-                int uvSize2 = (width * height) / 2;
-
-                SecVideoCapture.Info_t info = new SecVideoCapture.Info_t
-                {
-                    iGivenBufferSize1 = ySize2,
-                    iGivenBufferSize2 = uvSize2,
-                    pImageY = _pImageY,
-                    pImageUV = _pImageUV
-                };
-
-                // Call T7 SDK capture (video only, no UI overlay)
-                int result = SecVideoCaptureT7.CaptureScreenVideo(width, height, ref info);
-
-                // Check result
-                if (result < 0)
-                {
-                    return CaptureResult.CreateFailure($"T7 SDK returned error code: {result}");
-                }
-
-                // Copy data from unmanaged buffers
-                byte[] yData = new byte[ySize2];
-                byte[] uvData = new byte[uvSize2];
-                Marshal.Copy(info.pImageY, yData, 0, ySize2);
-                Marshal.Copy(info.pImageUV, uvData, 0, uvSize2);
-
-                return CaptureResult.CreateSuccess(yData, uvData, info.iWidth, info.iHeight);
-            }
-            catch (Exception ex)
-            {
-                return CaptureResult.CreateFailure($"T7 SDK exception: {ex.Message}");
-            }
+            // T7 SDK methods are disabled on Tizen 8+ (DllImports commented out for safety)
+            // This should never be called because IsAvailable() returns false on Tizen 8+
+            // But we need it to compile, so return failure immediately
+            return CaptureResult.CreateFailure(
+                "T7 SDK is disabled - T7 API methods not available on Tizen 8+");
         }
 
         public void Cleanup()
