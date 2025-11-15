@@ -63,12 +63,38 @@ namespace HyperTizen.WebSocket
                     $"HttpListener failed to start on port 45677: ErrorCode={ex.ErrorCode}, Message={ex.Message}");
                 Helper.Log.Write(Helper.eLogType.Error,
                     $"This may be a Tizen 9 permission issue. Check manifest privileges.");
+
+                // Show TV notification so user can see the error even without logs
+                try
+                {
+                    var notif = new Tizen.Applications.Notifications.Notification
+                    {
+                        Title = "WebSocket Error",
+                        Content = $"Control server failed: Code {ex.ErrorCode}",
+                        Count = 1
+                    };
+                    Tizen.Applications.Notifications.NotificationManager.Post(notif);
+                }
+                catch { /* Ignore notification errors */ }
             }
             catch (Exception ex)
             {
                 Helper.Log.Write(Helper.eLogType.Error,
                     $"Control WebSocket server failed to start: {ex.GetType().Name} - {ex.Message}");
                 Helper.Log.Write(Helper.eLogType.Debug, $"StackTrace: {ex.StackTrace}");
+
+                // Show TV notification so user can see the error even without logs
+                try
+                {
+                    var notif = new Tizen.Applications.Notifications.Notification
+                    {
+                        Title = "WebSocket Error",
+                        Content = $"Control server: {ex.Message}",
+                        Count = 1
+                    };
+                    Tizen.Applications.Notifications.NotificationManager.Post(notif);
+                }
+                catch { /* Ignore notification errors */ }
             }
         }
 

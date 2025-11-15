@@ -28,6 +28,19 @@ namespace HyperTizen
                 {
                     Helper.Log.Write(Helper.eLogType.Error,
                         $"Control WebSocket server task crashed: {ex.Message}");
+
+                    // Show TV notification so user can see the error even without logs
+                    try
+                    {
+                        Notification crashNotif = new Notification
+                        {
+                            Title = "WebSocket Critical Error",
+                            Content = $"Task crashed: {ex.Message}",
+                            Count = 1
+                        };
+                        NotificationManager.Post(crashNotif);
+                    }
+                    catch { /* Ignore notification errors */ }
                 }
             });
 
