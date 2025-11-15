@@ -158,7 +158,7 @@ namespace HyperTizen
                 try
                 {
                     _captureSelector = new CaptureMethodSelector();
-                    _selectedCaptureMethod = _captureSelector.SelectBestMethod();
+                    _selectedCaptureMethod = await _captureSelector.SelectBestMethodAsync();
 
                     if (_selectedCaptureMethod == null)
                     {

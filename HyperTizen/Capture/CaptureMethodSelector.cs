@@ -40,60 +40,61 @@ namespace HyperTizen.Capture
         /// Select the best available capture method by testing each in priority order
         /// Returns the first method that passes both IsAvailable() and Test() checks
         /// Cleans up all failed and unused methods automatically
-        /// Thread-safe - only one thread can execute selection at a time
+        /// ASYNC - Uses await Task.Run() to prevent Tizen async context deadlock (matches production Capture pattern)
         /// </summary>
         /// <returns>The best working capture method, or null if all methods fail</returns>
-        public ICaptureMethod SelectBestMethod()
+        public async Task<ICaptureMethod> SelectBestMethodAsync()
         {
-            lock (_selectionLock)
+            // Check cache outside lock
+            if (_hasSelectedMethod)
             {
-                // If already selected, return cached result
-                if (_hasSelectedMethod)
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"CaptureMethodSelector: Returning cached selection: {_selectedMethod?.Name ?? "null"}");
+                return _selectedMethod;
+            }
+
+            Helper.Log.Write(Helper.eLogType.Info, "CaptureMethodSelector: Starting capture method selection");
+            Helper.Log.Write(Helper.eLogType.Info, "CaptureMethodSelector: Testing methods in priority order (T8SDK → T7SDK → PixelSampling)");
+
+            // Sort methods by priority (highest to lowest)
+            var sortedMethods = _methods.OrderByDescending(m => m.Type).ToList();
+
+            ICaptureMethod selectedMethod = null;
+            var failedMethods = new List<ICaptureMethod>();
+
+            // Test each method in priority order
+            foreach (var method in sortedMethods)
+            {
+                try
                 {
-                    Helper.Log.Write(Helper.eLogType.Debug,
-                        $"CaptureMethodSelector: Returning cached selection: {_selectedMethod?.Name ?? "null"}");
-                    return _selectedMethod;
-                }
+                    Helper.Log.Write(Helper.eLogType.Info,
+                        $"CaptureMethodSelector: Testing {method.Name} (Priority: {(int)method.Type})");
 
-                Helper.Log.Write(Helper.eLogType.Info, "CaptureMethodSelector: Starting capture method selection");
-                Helper.Log.Write(Helper.eLogType.Info, "CaptureMethodSelector: Testing methods in priority order (T8SDK → T7SDK → PixelSampling)");
-
-                // Sort methods by priority (highest to lowest)
-                var sortedMethods = _methods.OrderByDescending(m => m.Type).ToList();
-
-                ICaptureMethod selectedMethod = null;
-                var failedMethods = new List<ICaptureMethod>();
-
-                // Test each method in priority order
-                foreach (var method in sortedMethods)
-                {
-                    try
+                    // Step 1: Quick availability check (no capture, just checks prerequisites)
+                    bool isAvailable = method.IsAvailable();
+                    if (!isAvailable)
                     {
                         Helper.Log.Write(Helper.eLogType.Info,
-                            $"CaptureMethodSelector: Testing {method.Name} (Priority: {(int)method.Type})");
+                            $"CaptureMethodSelector: {method.Name} - Not available (prerequisites not met)");
+                        failedMethods.Add(method);
+                        continue;
+                    }
 
-                        // Step 1: Quick availability check (no capture, just checks prerequisites)
-                        bool isAvailable = method.IsAvailable();
-                        if (!isAvailable)
-                        {
-                            Helper.Log.Write(Helper.eLogType.Info,
-                                $"CaptureMethodSelector: {method.Name} - Not available (prerequisites not met)");
-                            failedMethods.Add(method);
-                            continue;
-                        }
+                    Helper.Log.Write(Helper.eLogType.Info,
+                        $"CaptureMethodSelector: {method.Name} - Availability check PASSED");
 
-                        Helper.Log.Write(Helper.eLogType.Info,
-                            $"CaptureMethodSelector: {method.Name} - Availability check PASSED");
+                    // Step 2: Real capture test using await Task.Run() (same pattern as production Capture - HyperionClient.cs:379-384)
+                    Helper.Log.Write(Helper.eLogType.Info,
+                        $"CaptureMethodSelector: {method.Name} - Running capture test...");
 
-                        // Step 2: Real capture test (direct call - no timeout wrapper to avoid deadlock)
-                        Helper.Log.Write(Helper.eLogType.Info,
-                            $"CaptureMethodSelector: {method.Name} - Running capture test...");
+                    bool testPassed = false;
 
-                        bool testPassed = false;
-
+                    // CRITICAL: Use await Task.Run() to prevent Tizen async context deadlock
+                    // This matches the production Capture() pattern
+                    await Task.Run(() =>
+                    {
                         try
                         {
-                            // Call test directly without Task.Run().Wait() to avoid deadlock on Tizen async context
                             testPassed = method.Test();
                         }
                         catch (Exception ex)
@@ -102,14 +103,15 @@ namespace HyperTizen.Capture
                                 $"CaptureMethodSelector: {method.Name} - Test threw exception: {ex.Message}");
                             testPassed = false;
                         }
+                    });
 
-                        if (!testPassed)
-                        {
-                            Helper.Log.Write(Helper.eLogType.Warning,
-                                $"CaptureMethodSelector: {method.Name} - Capture test FAILED");
-                            failedMethods.Add(method);
-                            continue;
-                        }
+                    if (!testPassed)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning,
+                            $"CaptureMethodSelector: {method.Name} - Capture test FAILED");
+                        failedMethods.Add(method);
+                        continue;
+                    }
 
                         // Success! We found a working method
                         Helper.Log.Write(Helper.eLogType.Info,
@@ -138,29 +140,31 @@ namespace HyperTizen.Capture
                     }
                 }
 
-                // Clean up all failed and unused methods
-                CleanupFailedMethods(failedMethods);
+            // Clean up all failed and unused methods
+            CleanupFailedMethods(failedMethods);
 
-                // Log final result
-                if (selectedMethod != null)
-                {
-                    Helper.Log.Write(Helper.eLogType.Info,
-                        $"CaptureMethodSelector: Selection complete - Using {selectedMethod.Name}");
-                }
-                else
-                {
-                    Helper.Log.Write(Helper.eLogType.Error,
-                        "CaptureMethodSelector: Selection FAILED - No working capture methods found!");
-                    Helper.Log.Write(Helper.eLogType.Error,
-                        "CaptureMethodSelector: All capture methods failed. Please check system compatibility.");
-                }
+            // Log final result
+            if (selectedMethod != null)
+            {
+                Helper.Log.Write(Helper.eLogType.Info,
+                    $"CaptureMethodSelector: Selection complete - Using {selectedMethod.Name}");
+            }
+            else
+            {
+                Helper.Log.Write(Helper.eLogType.Error,
+                    "CaptureMethodSelector: Selection FAILED - No working capture methods found!");
+                Helper.Log.Write(Helper.eLogType.Error,
+                    "CaptureMethodSelector: All capture methods failed. Please check system compatibility.");
+            }
 
-                // Cache the result
+            // Cache the result (thread-safe)
+            lock (_selectionLock)
+            {
                 _selectedMethod = selectedMethod;
                 _hasSelectedMethod = true;
-
-                return selectedMethod;
             }
+
+            return selectedMethod;
         }
 
         /// <summary>
