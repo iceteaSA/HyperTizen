@@ -21,10 +21,18 @@ namespace HyperTizen.Capture
 
         public bool IsAvailable()
         {
-            // Check if library exists
+            // T7 SDK not available on Tizen 9+ (library removed)
+            if (SDK.SystemInfo.TizenVersionMajor >= 9)
+            {
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    "T7SDK: Not available (Tizen 9+ detected - libsec-video-capture.so.0 removed from OS)");
+                return false;
+            }
+
+            // Check if T7 library exists
             if (!System.IO.File.Exists("/usr/lib/libsec-video-capture.so.0"))
             {
-                Helper.Log.Write(Helper.eLogType.Debug, "T7SDK: Not available (library not found)");
+                Helper.Log.Write(Helper.eLogType.Debug, "T7SDK: Not available (library file not found)");
                 return false;
             }
 

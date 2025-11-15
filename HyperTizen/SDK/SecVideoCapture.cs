@@ -11,16 +11,29 @@ namespace HyperTizen.SDK
 {
     public static unsafe class SecVideoCaptureT7 //for Tizen 7 and below
     {
-        [DllImport("/usr/lib/libsec-video-capture.so.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen_unlock")]
-        unsafe public static extern int CaptureScreenUnlock();
-        [DllImport("/usr/lib/libsec-video-capture.so.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen")] //record with ui
-        unsafe public static extern int CaptureScreen(int w, int h, ref Info_t pInfo);
-        [DllImport("/usr/lib/libsec-video-capture.so.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen_video_only")] // without ui
-        unsafe public static extern int CaptureScreenVideo(int w, int h, ref Info_t pInfo);
-        [DllImport("/usr/lib/libsec-video-capture.so.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen_video_only_crop")] // cropped
-        unsafe public static extern int CaptureScreenCrop(int w, int h, ref Info_t pInfo, int iCapture3DMode, int cropW, int cropH);
-        [DllImport("/usr/lib/libsec-video-capture.so.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen_no_lock_no_copy")] // unknown
-        unsafe public static extern int CaptureScreenNoLocknoCopy(int w, int h, ref Info_t pInfo);
+        // WARNING: TIZEN 7 ONLY - These DllImports will CRASH on Tizen 8+!
+        // CRITICAL SAFETY: libsec-video-capture.so.0 does NOT exist on Tizen 8+ TVs
+        // Calling these methods on Tizen 8+ will cause DllNotFoundException or native crashes
+        //
+        // USAGE: Only call these methods if SystemInfo.TizenVersionMajor < 8
+        // See SecVideoCapture.CaptureScreen() for proper version checking (line 930)
+        //
+        // DISABLED to prevent accidental usage on Tizen 8+:
+        //
+        // [DllImport("/usr/lib/libsec-video-capture.so.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen_unlock")]
+        // unsafe public static extern int CaptureScreenUnlock();
+        //
+        // [DllImport("/usr/lib/libsec-video-capture.so.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen")]
+        // unsafe public static extern int CaptureScreen(int w, int h, ref Info_t pInfo);
+        //
+        // [DllImport("/usr/lib/libsec-video-capture.so.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen_video_only")]
+        // unsafe public static extern int CaptureScreenVideo(int w, int h, ref Info_t pInfo);
+        //
+        // [DllImport("/usr/lib/libsec-video-capture.so.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen_video_only_crop")]
+        // unsafe public static extern int CaptureScreenCrop(int w, int h, ref Info_t pInfo, int iCapture3DMode, int cropW, int cropH);
+        //
+        // [DllImport("/usr/lib/libsec-video-capture.so.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "secvideo_api_capture_screen_no_lock_no_copy")]
+        // unsafe public static extern int CaptureScreenNoLocknoCopy(int w, int h, ref Info_t pInfo);
         //Main Func Errors:
         //-1 "Input Pram is Wrong"
         //-1,-2,-3,-5...negative numbers without 4 "Failed scaler_capture"
@@ -120,20 +133,25 @@ namespace HyperTizen.SDK
         // [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "_Z11getInstancev")]
         // private static extern IVideoCapture* GetInstanceImplSecMangled();
 
-        // Direct function imports - try from multiple libraries
-        // Try 1: From libvideo-capture.so.0.1.0 (the library that successfully loads)
-        [DllImport("/usr/lib/libvideo-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getVideoMainYUV")]
-        private static extern int GetVideoMainYUVDirectMain(IVideoCapture* instance, ref InputParams input, byte* output);
-
-        [DllImport("/usr/lib/libvideo-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getVideoPostYUV")]
-        private static extern int GetVideoPostYUVDirectMain(IVideoCapture* instance, ref InputParams input, byte* output);
-
-        // Try 2: From libvideo-capture-impl-sec.so (if it exists)
-        [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getVideoMainYUV")]
-        private static extern int GetVideoMainYUVDirectImpl(IVideoCapture* instance, ref InputParams input, byte* output);
-
-        [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getVideoPostYUV")]
-        private static extern int GetVideoPostYUVDirectImpl(IVideoCapture* instance, ref InputParams input, byte* output);
+        // DISABLED: Direct function imports - these cause crashes on Tizen 8+!
+        // CRITICAL SAFETY: These libraries don't export these functions or crash when called directly
+        // libvideo-capture-impl-sec.so does NOT exist on this TV model
+        // Direct function calls to libvideo-capture.so.0.1.0 return -95 (not supported)
+        //
+        // VTABLE-ONLY MODE: Only use getInstance() -> vtable approach (lines 514-548)
+        // DO NOT re-enable these methods - they will crash the app or return -95
+        //
+        // [DllImport("/usr/lib/libvideo-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getVideoMainYUV")]
+        // private static extern int GetVideoMainYUVDirectMain(IVideoCapture* instance, ref InputParams input, byte* output);
+        //
+        // [DllImport("/usr/lib/libvideo-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getVideoPostYUV")]
+        // private static extern int GetVideoPostYUVDirectMain(IVideoCapture* instance, ref InputParams input, byte* output);
+        //
+        // [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getVideoMainYUV")]
+        // private static extern int GetVideoMainYUVDirectImpl(IVideoCapture* instance, ref InputParams input, byte* output);
+        //
+        // [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getVideoPostYUV")]
+        // private static extern int GetVideoPostYUVDirectImpl(IVideoCapture* instance, ref InputParams input, byte* output);
 
         private static IVideoCapture* ProbeForGetInstance()
         {
@@ -657,24 +675,10 @@ namespace HyperTizen.SDK
                 return -99;
             }
 
-            // Try 1: Direct function call (based on exports)
-            try
-            {
-                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Trying direct function call to getVideoMainYUV...");
-                int result = CaptureScreenDirect(w, h, ref pInfo);
-                if (result == 0 || result == 4)
-                {
-                    Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Direct function call succeeded!");
-                    return result;
-                }
-                Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: Direct function call returned {result}, trying vtable...");
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: Direct function call failed: {ex.Message}, trying vtable...");
-            }
+            // VTABLE-ONLY MODE: Only use vtable approach (no direct function calls)
+            // Direct function imports have been DISABLED as they cause crashes
 
-            // Try 2: VTable API (getVideoMainYUV with lock/unlock)
+            // Use VTable API (getVideoMainYUV with lock/unlock)
             if (useNewApi && getVideoMainYUV != null && lockFunc != null && unlockFunc != null)
             {
                 int result = CaptureScreenNewApi(w, h, ref pInfo);
@@ -689,7 +693,7 @@ namespace HyperTizen.SDK
 
                 return result;
             }
-            // Try 3: Fall back to old API if available
+            // Fall back to old API if available
             else if (captureScreen != null)
             {
                 return captureScreen(instance, w, h, ref pInfo);
@@ -701,81 +705,12 @@ namespace HyperTizen.SDK
             }
         }
 
-        private static int CaptureScreenDirect(int w, int h, ref Info_t pInfo)
-        {
-            // Prepare input parameters (same as vtable method)
-            InputParams input = new InputParams();
-            byte[] outputBuffer = new byte[80]; // 0x50 bytes
-
-            // Initialize input structure based on decompiled code
-            input.field0 = 0;
-            input.field1 = 0;
-            input.field2 = 0xffff;
-            input.field3 = 0xffff;
-            input.field4 = 1;
-            input.field5 = 0;
-            input.field6 = 0;
-            input.field7 = 0;
-            input.field8 = 0;
-            input.field9 = 0;
-            input.bufferSize1 = pInfo.iGivenBufferSize1;  // 0x7e900 typically
-            input.bufferSize2 = pInfo.iGivenBufferSize2;  // 0x7e900 typically
-            input.pYBuffer = pInfo.pImageY;
-            input.pUVBuffer = pInfo.pImageUV;
-
-            // Call getVideoMainYUV from libvideo-capture.so.0.1.0
-            // (libvideo-capture-impl-sec.so does not exist on this TV)
-            try
-            {
-                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Calling getVideoMainYUV directly...");
-                fixed (byte* pOutput = outputBuffer)
-                {
-                    int result = GetVideoMainYUVDirectMain(instance, ref input, pOutput);
-                    Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: getVideoMainYUV returned: {result}");
-
-                    if (result == 0 || result == 4)
-                    {
-                        return ParseDirectCaptureResult(result, pOutput, ref pInfo, "libvideo-capture.so.0.1.0");
-                    }
-                    else if (result == -4)
-                    {
-                        Helper.Log.Write(Helper.eLogType.Warning, "T8 SDK: DRM content detected (result: -4)");
-                        return result;
-                    }
-                    else
-                    {
-                        Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: getVideoMainYUV returned unexpected code: {result}");
-                        throw new Exception($"Direct function call returned {result}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Error, $"T8 SDK: Direct function call failed: {ex.Message}");
-                throw; // Re-throw to let caller try vtable method
-            }
-        }
-
-        private static int ParseDirectCaptureResult(int result, byte* pOutput, ref Info_t pInfo, string source)
-        {
-            // Parse output - width and height should be at offsets 0 and 4
-            int* pInts = (int*)pOutput;
-            int outWidth = pInts[0];
-            int outHeight = pInts[1];
-
-            if (outWidth > 960 && outHeight > 540)
-            {
-                pInfo.iWidth = outWidth;
-                pInfo.iHeight = outHeight;
-                Helper.Log.Write(Helper.eLogType.Info, $"T8 SDK: Direct capture from {source} successful! Resolution: {outWidth}x{outHeight}");
-            }
-            else
-            {
-                Helper.Log.Write(Helper.eLogType.Warning, $"T8 SDK: Direct capture from {source} dimensions invalid: {outWidth}x{outHeight}");
-            }
-
-            return result;
-        }
+        // REMOVED: CaptureScreenDirect() method
+        // This method used unsafe DllImport calls that caused crashes on Tizen 8+
+        // Use ONLY the vtable approach via CaptureScreenNewApi()
+        //
+        // REMOVED: ParseDirectCaptureResult() helper method
+        // No longer needed since CaptureScreenDirect() has been removed
 
         public static void EnableNewApi()
         {
@@ -929,13 +864,20 @@ namespace HyperTizen.SDK
 
         public static unsafe int CaptureScreen(int w, int h, ref Info_t pInfo)
         {
-            // Use T7 if explicitly set OR if Tizen 7 or below
-            if (useT7Fallback || SystemInfo.TizenVersionMajor < 8)
+            // SAFETY: T7 API has been DISABLED (see SecVideoCaptureT7 class)
+            // T7 API only exists on Tizen 7 and below - calling it on Tizen 8+ will crash
+            // On Tizen 8+, we ONLY use the T8 vtable approach or PixelSampling fallback
+
+            if (SystemInfo.TizenVersionMajor < 8)
             {
-                return SecVideoCaptureT7.CaptureScreen(w, h, ref pInfo);
+                // Tizen 7 or below: T7 API is available but DllImports are commented out
+                Helper.Log.Write(Helper.eLogType.Error, "T7 API has been disabled for safety");
+                Helper.Log.Write(Helper.eLogType.Info, "To use T7 API on Tizen 7, uncomment DllImports in SecVideoCaptureT7 class");
+                return -95; // Operation not supported
             }
             else
             {
+                // Tizen 8+: Use T8 vtable approach
                 // Only init once for T8
                 if (!initAttempted)
                 {
@@ -947,11 +889,11 @@ namespace HyperTizen.SDK
                     catch (Exception ex)
                     {
                         Helper.Log.Write(Helper.eLogType.Error, $"T8 Init failed: {ex.Message}");
-                        SetT7Fallback();
-                        return SecVideoCaptureT7.CaptureScreen(w, h, ref pInfo);
+                        Helper.Log.Write(Helper.eLogType.Info, "CaptureMethodSelector will try next method (PixelSampling)");
+                        return -95; // Operation not supported - let caller try PixelSampling
                     }
                 }
-                
+
                 return SecVideoCaptureT8.CaptureScreen(w, h, ref pInfo);
             }
         }
