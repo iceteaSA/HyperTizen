@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using Tizen.Applications.Notifications;
 using static HyperTizen.SDK.SecVideoCapture;
 
 namespace HyperTizen.SDK
@@ -106,15 +107,18 @@ namespace HyperTizen.SDK
         private static bool isInitialized = false;
         private static bool useNewApi = true; // Try new API first
 
-        // getInstance - try from both libraries
-        [DllImport("/usr/lib/libvideo-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "_Z11getInstancev")]
-        private static extern IVideoCapture* GetInstanceMangled();
-
-        [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getInstance")]
-        private static extern IVideoCapture* GetInstanceImplSec();
-
-        [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "_Z11getInstancev")]
-        private static extern IVideoCapture* GetInstanceImplSecMangled();
+        // DISABLED: P/Invoke getInstance methods - these cause crashes!
+        // VTABLE-ONLY MODE: Only use dlopen/dlsym approach in ProbeForGetInstance()
+        // DO NOT re-enable these methods - they will crash the app
+        //
+        // [DllImport("/usr/lib/libvideo-capture.so.0.1.0", CallingConvention = CallingConvention.Cdecl, EntryPoint = "_Z11getInstancev")]
+        // private static extern IVideoCapture* GetInstanceMangled();
+        //
+        // [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "getInstance")]
+        // private static extern IVideoCapture* GetInstanceImplSec();
+        //
+        // [DllImport("/usr/lib/libvideo-capture-impl-sec.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "_Z11getInstancev")]
+        // private static extern IVideoCapture* GetInstanceImplSecMangled();
 
         // Direct function imports - try from multiple libraries
         // Try 1: From libvideo-capture.so.0.1.0 (the library that successfully loads)
@@ -139,6 +143,20 @@ namespace HyperTizen.SDK
             {
                 string error = dlerror();
                 Helper.Log.Write(Helper.eLogType.Error, $"T8 SDK: dlopen failed: {error}");
+
+                // Show TV notification explaining why we're skipping this method
+                try
+                {
+                    Notification notification = new Notification
+                    {
+                        Title = "T8 SDK: Library Access Denied",
+                        Content = "libtzcapturec.so not accessible via dlopen - trying next method",
+                        Count = 1
+                    };
+                    NotificationManager.Post(notification);
+                }
+                catch { /* Ignore notification errors */ }
+
                 return null;
             }
 
@@ -328,43 +346,30 @@ namespace HyperTizen.SDK
 
         private static IVideoCapture* TryGetInstance()
         {
+            // VTABLE-ONLY MODE: Only use dlopen/dlsym approach
+            // P/Invoke fallbacks have been DISABLED as they cause crashes
+            Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: VTABLE-only mode - P/Invoke fallbacks disabled");
+            Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Attempting dynamic symbol probing (dlopen/dlsym)...");
+
             IVideoCapture* inst = null;
 
-            // Try 1: Dynamic symbol probing (most flexible, tries all symbol variants)
-            // This is the best approach as it tests multiple symbol name variations
             try
             {
-                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Attempting dynamic symbol probing...");
                 inst = ProbeForGetInstance();
                 if (inst != null)
                 {
-                    Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: ✓ Success with dynamic probing!");
+                    Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: ✓ Success with VTABLE approach (dlopen/dlsym)!");
                     return inst;
                 }
             }
             catch (Exception ex)
             {
-                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: Dynamic probing failed: {ex.Message}");
+                Helper.Log.Write(Helper.eLogType.Error, $"T8 SDK: VTABLE approach failed: {ex.Message}");
             }
 
-            // Try 2: Standard P/Invoke with mangled name
-            try
-            {
-                Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: Trying _Z11getInstancev via P/Invoke...");
-                inst = GetInstanceMangled();
-                if (inst != null)
-                {
-                    Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: ✓ Success with P/Invoke mangled name!");
-                    return inst;
-                }
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug, $"T8 SDK: P/Invoke failed: {ex.Message}");
-            }
-
-            Helper.Log.Write(Helper.eLogType.Error, "T8 SDK: All getInstance attempts failed!");
-            Helper.Log.Write(Helper.eLogType.Error, "T8 SDK: The getInstance symbol may not exist, or requires different calling convention");
+            // If VTABLE method failed, return null immediately - NO P/Invoke fallbacks
+            Helper.Log.Write(Helper.eLogType.Warning, "T8 SDK: Library not accessible via dlopen - skipping this method");
+            Helper.Log.Write(Helper.eLogType.Info, "T8 SDK: CaptureMethodSelector will try next method (T7 SDK or PixelSampling)");
             return null;
         }
 
