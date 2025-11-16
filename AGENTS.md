@@ -8,14 +8,14 @@ This document provides essential guidance for Claude or other LLMs working with 
 
 ### Project Overview
 
-HyperTizen is an experimental fork of a Hyperion/HyperHDR screen capturer for Samsung Tizen TVs, focused on **Tizen 8.0+ screen capture research**. Samsung's firmware blocks standard capture APIs on Tizen 8.0+, requiring alternative approaches.
+HyperTizen is an experimental fork of a Hyperion/HyperHDR screen capturer for Samsung Tizen TVs, focused on **Tizen 8.0+ screen capture research**.
 
 **Current Status:**
-- **VideoEnhance pixel sampling** = ONLY working method on Tizen 8.0+
-- **T8 vtable API** = Technically complete but firmware-blocked (returns -95 error)
-- **T7 legacy API** = Doesn't exist on Tizen 8.0+
+- **T8 SDK Capture Method** = NOT YET IMPLEMENTED (scaffolding exists)
+- **T7 SDK Capture Method** = NOT YET IMPLEMENTED (scaffolding exists)
+- **Pixel Sampling Capture Method** = NOT YET IMPLEMENTED (scaffolding exists)
 
-**Critical Constraint:** Samsung firmware actively blocks most capture APIs through feature flags. Always verify methods work on actual TV hardware - emulator testing is not reliable.
+**Critical Constraint:** Always verify methods on actual TV hardware - emulator testing is not reliable. Different Tizen firmware versions may have different API availability.
 
 ---
 
@@ -61,22 +61,22 @@ Startup Flow:
 4. Single active capture method used for entire session
 
 Three Capture Methods (Priority Order):
-1. T8SdkCaptureMethod (BLOCKED by firmware)
+1. T8SdkCaptureMethod
    ├─ libvideo-capture.so.0.1.0
-   ├─ Complete vtable implementation (Lock → getVideoMainYUV → Unlock)
-   ├─ Returns -95 (EOPNOTSUPP) - feature flags disabled by Samsung
+   ├─ Vtable implementation (Lock → getVideoMainYUV → Unlock)
+   ├─ May not be available on all firmware versions
    └─ See: HyperTizen/Capture/T8SdkCaptureMethod.cs
 
-2. T7SdkCaptureMethod (MISSING on Tizen 8+)
+2. T7SdkCaptureMethod
    ├─ libsec-video-capture.so.0
-   ├─ Old API from Tizen 7.0 and earlier
-   ├─ Library doesn't exist on Tizen 8.0+ firmware
+   ├─ Legacy API from Tizen 7.0 and earlier
+   ├─ May not exist on Tizen 8.0+ firmware
    └─ See: HyperTizen/Capture/T7SdkCaptureMethod.cs
 
-3. PixelSamplingCaptureMethod (WORKING on Tizen 8+)
+3. PixelSamplingCaptureMethod
    ├─ libvideoenhance.so
    ├─ VideoEnhance_SamplePixel() - samples individual RGB pixels
-   ├─ Slower than frame capture, but NOT blocked
+   ├─ Slower than frame capture, may have different availability
    └─ See: HyperTizen/Capture/PixelSamplingCaptureMethod.cs
 ```
 
@@ -98,9 +98,9 @@ Three Capture Methods (Priority Order):
 - **`HyperTizen/Capture/ICaptureMethod.cs`** - Interface for all capture methods
 - **`HyperTizen/Capture/CaptureMethodSelector.cs`** - Tests and selects best method
 - **`HyperTizen/Capture/CaptureResult.cs`** - Standardized capture result wrapper
-- **`HyperTizen/Capture/T8SdkCaptureMethod.cs`** - T8 API (blocked but complete)
+- **`HyperTizen/Capture/T8SdkCaptureMethod.cs`** - T8 API (implementation complete)
 - **`HyperTizen/Capture/T7SdkCaptureMethod.cs`** - T7 legacy API (missing on T8+)
-- **`HyperTizen/Capture/PixelSamplingCaptureMethod.cs`** - Pixel sampling (WORKING)
+- **`HyperTizen/Capture/PixelSamplingCaptureMethod.cs`** - Pixel sampling approach
 
 **Core Services:**
 - **`HyperTizen/LogWebSocketServer.cs`** - WebSocket log streaming
@@ -253,20 +253,19 @@ if (handle != IntPtr.Zero)
 
 ## Critical Constraints
 
-### Samsung Firmware Blocks
+### API Availability on Different Firmware Versions
 
-**The Problem:** Samsung intentionally disables capture APIs on Tizen 8.0+ through firmware feature flags.
+**Observation:** Different capture APIs may not be available on all Tizen firmware versions.
 
-**Evidence:**
-- T8 API returns `-95 (EOPNOTSUPP)` even with correct implementation
-- vtable methods exist and are correctly called
-- Same code works on Tizen 7.0 and earlier
-- DRM detection returns different error (`-4`)
+**Considerations:**
+- Some capture APIs return `-95 (EOPNOTSUPP)` on certain firmware versions
+- The same implementation may behave differently on different Tizen versions
+- DRM content detection returns different error codes (`-4`)
 
-**Workarounds:**
-- VideoEnhance pixel sampling (currently ONLY working method)
-- Cannot be "fixed" - firmware restriction is intentional
-- Future Samsung updates may block more methods
+**Approach:**
+- Test multiple capture methods to find what works on your specific firmware
+- Different methods may work on different hardware/firmware combinations
+- Document which methods work on which firmware versions
 
 ### DRM Content Restrictions
 
@@ -428,17 +427,17 @@ The `.agents` file defines specialized agents for different aspects of the proje
 | **0** | Success | Normal operation | Continue |
 | **4** | Success (alternate) | Valid result code | Continue |
 | **-4** | DRM Content | Netflix, HDCP, Widevine protected | Cannot capture - expected |
-| **-95** | Operation Not Supported | Samsung firmware block | Try alternative methods |
+| **-95** | Operation Not Supported | API may not be available on this firmware | Try alternative methods |
 | **-99** | Not Initialized | Library not ready or internal error | Check initialization |
 
 ### Error Code Details
 
-**-95 (EOPNOTSUPP) - The Big Problem**
-- **Cause:** Samsung firmware intentionally disables the feature flag
-- **Evidence:** T8 vtable API correctly implemented but blocked
-- **Workaround:** VideoEnhance pixel sampling (not blocked)
-- **Cannot fix:** Firmware restriction is intentional by Samsung
-- **Affects:** Most official capture APIs on Tizen 8.0+
+**-95 (EOPNOTSUPP) - Operation Not Supported**
+- **Cause:** The API may not be available on this firmware version
+- **Note:** T8 vtable API implementation is correct but returns this error on some firmware
+- **Approach:** Test alternative capture methods
+- **Testing:** Verify behavior on actual hardware (may vary by firmware/TV model)
+- **Applies to:** Various capture APIs on different Tizen versions
 
 **-4 (DRM Protected)**
 - **Cause:** Content is DRM-protected (Netflix, HDCP HDMI, Widevine)
@@ -490,13 +489,13 @@ Unless explicitly required or fixing bugs, avoid modifying:
 - **`tizen-manifest.xml`** - Unless changing permissions/capabilities
 - **Certificate files** - Build/signing configuration
 
-### Working Capture Code
-- **VideoEnhanceCapture.cs** - Only working method, don't break it
-- **Unless improving performance or fixing bugs**
+### Capture Method Implementations
+- **Capture method files** - Test thoroughly before modifying
+- **HyperTizen/Capture/*.cs** - Core capture implementations
 
 ### What You CAN Modify
 
-- **Capture method implementations** - T8 API, T7 API, or new methods
+- **Capture method implementations** - T8 API, T7 API, Pixel Sampling, or new methods (test thoroughly)
 - **Log.cs** - Adding logging features
 - **Preferences.cs** - Adding new configuration options
 - **Documentation files** - Always keep these updated
@@ -613,13 +612,13 @@ Screenshot showing exported functions from `libvideo-capture-impl-sec.so`:
 
 ### Error -95 (Operation Not Supported)
 
-**Reality:** Samsung firmware block - cannot be "fixed"
+**Observation:** This API may not be available on the current firmware version.
 
 **Actions:**
-- Don't waste time trying to work around it
-- Use alternative methods (VideoEnhance)
-- Document in README.md and technical docs if new API also blocked
-- This is a firmware restriction, not a bug
+- Test alternative capture methods to find what works
+- Document which methods work/don't work on your specific hardware
+- This is expected behavior on some firmware versions
+- Error code may vary by TV model and firmware version
 
 ### Error -4 (DRM Content)
 
@@ -647,15 +646,15 @@ curl http://<TV_IP>:45678
 # Should return logs.html content
 ```
 
-### VideoEnhance Too Slow
+### Pixel Sampling Performance
 
-**Reality:** Pixel sampling is inherently slower than frame capture
+**Observation:** Pixel sampling methods may be slower than frame capture approaches
 
 **Actions:**
 - Optimize batch sizes for pixel sampling
-- Adjust sleep times between samples
-- This is expected - not a bug
-- Trade-off: slower but actually works on T8
+- Adjust sleep times between samples based on your firmware performance
+- Performance may vary by TV model and firmware version
+- Balance speed vs availability based on your hardware
 
 ### getInstance Symbol Not Found
 
@@ -692,12 +691,13 @@ curl http://<TV_IP>:45678
 4. ✅ Note next steps and blockers
 
 ### Key Constraints to Remember
-- VideoEnhance = ONLY working method on Tizen 8
-- Samsung firmware blocks T8 API with -95
-- DRM content always returns -4 (expected)
+- Multiple capture methods exist - test to find what works on your firmware
+- T8 API returns -95 on some firmware versions (may vary by TV model)
+- DRM content always returns -4 (expected behavior)
 - Library crashes common - use blacklist
 - Always test on actual TV hardware
 - WebSocket logs are essential for debugging
+- Different firmware versions may have different API availability
 
 ### File Paths Quick Reference
 ```
@@ -725,4 +725,4 @@ curl http://<TV_IP>:45678
 
 ---
 
-**Remember:** This is research code working around Samsung firmware restrictions. Always be factual about what works vs what's blocked, document everything, and maintain continuity via README.md and AGENTS.md.
+**Remember:** This is research code exploring screen capture on Samsung Tizen TVs. Always be factual about what works and what doesn't on your specific hardware/firmware, document everything, and maintain continuity via README.md and AGENTS.md.

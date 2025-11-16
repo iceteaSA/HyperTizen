@@ -21,9 +21,10 @@ agents:
       - Feature flags and capability checking on different TV models
 
     key_files:
-      - /home/user/HyperTizen/HyperTizen/SDK/VideoEnhanceCapture.cs
-      - /home/user/HyperTizen/HyperTizen/SDK/SecVideoCapture.cs
-      - /home/user/HyperTizen/HyperTizen/VideoCapture.cs
+      - /home/user/HyperTizen/HyperTizen/Capture/T8SdkCaptureMethod.cs
+      - /home/user/HyperTizen/HyperTizen/Capture/T7SdkCaptureMethod.cs
+      - /home/user/HyperTizen/HyperTizen/Capture/PixelSamplingCaptureMethod.cs
+      - /home/user/HyperTizen/HyperTizen/Capture/CaptureMethodSelector.cs
       - /home/user/HyperTizen/references/GetCaptureFromTZ.c
 
     common_tasks:
@@ -44,12 +45,10 @@ agents:
       - "Why is the T8 vtable API blocked on newer Samsung firmware?"
 
     context: >
-      HyperTizen implements multiple screen capture strategies due to Samsung
-      firmware restrictions. The ONLY working method on Tizen 8.0+ is
-      VideoEnhance pixel sampling (libvideoenhance.so), which samples
-      individual RGB pixels rather than capturing full frames. The T8 vtable
-      API (libvideo-capture.so) is blocked by firmware (-95 error). The T7
-      API (libsec-video-capture.so.0) doesn't exist on Tizen 8.0+.
+      HyperTizen uses a systematic fallback capture architecture with the
+      ICaptureMethod interface. Three capture methods are available (T8SDK,
+      T7SDK, PixelSampling) with different priorities. Implementation details
+      need to be added based on TV hardware capabilities and available libraries.
 
   - name: debugging-assistant
     description: >
@@ -102,7 +101,7 @@ agents:
 
     debugging_workflow: >
       1. Start HyperTizen on TV
-      2. Open logs.html in browser and connect to TV IP:8765
+      2. Open logs.html in browser and connect to TV IP:45678
       3. Watch logs for initialization messages
       4. If using diagnostic mode, wait for 10-minute countdown
       5. Check for error codes and match against known issues
@@ -110,12 +109,12 @@ agents:
       7. If needed, SSH to TV for deeper inspection
 
     context: >
-      HyperTizen uses a WebSocket log server (port 8765) for real-time
+      HyperTizen uses a WebSocket log server (port 45678) for real-time
       debugging. The logs.html viewer provides color-coded, auto-scrolling
       logs with reconnection logic. Diagnostic mode (HyperionClient.cs)
       pauses the app for 10 minutes after initialization to allow testing.
-      Common failure points: library loading, getInstance calls, vtable
-      access, and DRM content detection.
+      Common failure points: library loading, capture method testing,
+      and DRM content detection.
 
   - name: native-interop-expert
     description: >
@@ -136,8 +135,9 @@ agents:
       - Symbol name mangling (C++ name decoration)
 
     key_files:
-      - /home/user/HyperTizen/HyperTizen/SDK/SecVideoCapture.cs
-      - /home/user/HyperTizen/HyperTizen/SDK/VideoEnhanceCapture.cs
+      - /home/user/HyperTizen/HyperTizen/Capture/T8SdkCaptureMethod.cs
+      - /home/user/HyperTizen/HyperTizen/Capture/T7SdkCaptureMethod.cs
+      - /home/user/HyperTizen/HyperTizen/Capture/PixelSamplingCaptureMethod.cs
       - /home/user/HyperTizen/HyperTizen/SDK/SystemInfo.cs
 
     common_tasks:
@@ -344,8 +344,8 @@ agents:
       HyperTizenUI is installed via TizenBrew as a GitHub module. It must
       maintain compatibility with the TizenBrew module system (package.json
       format, appPath, serviceFile). The UI communicates with the HyperTizen
-      service via WebSocket (port 8086). Service control is done through the
-      Tizen application API.
+      service via WebSocket (port 45677 for control, port 45678 for logs).
+      Service control is done through the Tizen application API.
 
   - name: tizenbrew-expert
     description: >
@@ -421,7 +421,7 @@ agents:
       - Maintain backwards compatibility
 
     context: >
-      The WebSocket server runs on port 8086 for control messages and
+      The WebSocket server runs on port 45677 for control messages and
       port 45678 for log streaming. The UI connects to both to provide
       full control and monitoring capabilities.
 
@@ -430,5 +430,5 @@ troubleshooting:
   app_crashes_on_start: "Often due to unsafe dlopen calls or library loading issues. Check logs.html for details."
   error_minus_95: "Samsung firmware block. API exists but is intentionally disabled. Try alternative methods."
   error_minus_4: "DRM protected content (Netflix, HDCP). Cannot capture. Try HDMI input or non-DRM content."
-  websocket_not_connecting: "Check TV IP address, ensure port 8765 is accessible, verify app is running."
+  websocket_not_connecting: "Check TV IP address, ensure ports 45677 and 45678 are accessible, verify app is running."
   videoenhance_slow: "Expected - pixel sampling is slower than frame capture. Optimize batch sizes and sleep times."

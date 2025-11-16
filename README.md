@@ -34,28 +34,13 @@ If you somehow find this useful, or just want to support questionable AI-driven 
 
 ## About This Fork
 
-This is an **experimental fork** of [HyperTizen](https://github.com/reisxd/HyperTizen) focused on implementing screen capture functionality for **Tizen 8.0+ TVs**. Samsung's firmware blocks the standard capture APIs on Tizen 8.0+, making the original HyperTizen unable to capture video frames on newer TV models. This fork explores alternative capture methods that work around these firmware restrictions.
+This is an **experimental fork** of [HyperTizen](https://github.com/reisxd/HyperTizen) focused on exploring screen capture functionality for **Tizen 8.0+ TVs**. The original HyperTizen uses capture APIs that may have different availability on newer TV models. This fork provides a scaffolding structure for researching and implementing potential capture methods for Tizen 8.0+ compatibility.
 
 ### Status: Research & Development
 
-This fork is primarily focused on research and proof-of-concept implementations for Tizen 8+ capture methods. While we have achieved a working breakthrough (see below), the implementation is slower than traditional capture methods and is still being optimized.
+This fork is primarily focused on research and exploration of potential Tizen 8+ capture methods. The current implementation provides **scaffolding and structure** for capture methods, but actual capture functionality is **NOT YET IMPLEMENTED**. This is a starter project to lay the groundwork for future capture method implementations.
 
-**New Capture Architecture:** HyperTizen now uses a systematic `ICaptureMethod` interface with automatic fallback selection. The `CaptureMethodSelector` tests available methods on startup (T8SDK → T7SDK → PixelSampling) and automatically selects the best working method for your TV.
-
----
-
-### VideoEnhance Pixel Sampling (WORKING)
-
-**Key Details:**
-- Uses `VideoEnhance_SamplePixel()` from libvideoenhance.so
-- Samples individual RGB pixels from the active video stream
-- **NOT blocked by Samsung firmware** (unlike official capture APIs)
-- Slower than full-frame capture, but proven to work on Tizen 8.0+
-
-**Performance Characteristics:**
-- Must sample pixels individually (no batch/frame operations)
-- Suitable for ambient lighting applications
-- Works on Samsung TVs running Tizen 8.0+ firmware
+**Capture Architecture:** HyperTizen includes a systematic `ICaptureMethod` interface structure designed to support multiple capture approaches. The `CaptureMethodSelector` is configured to test available methods on startup (T8SDK → T7SDK → PixelSampling), but the underlying capture functionality is not operational.
 
 ---
 
@@ -157,33 +142,34 @@ The control panel is perfect for:
 
 ## What Works (and What Doesn't)
 
-### Working on Tizen 8.0+
+### Implemented & Functional
 
-- **VideoEnhance Pixel Sampling**: Proven working capture method
-- **WebSocket Log Streaming**: Real-time debugging via browser
-- **Comprehensive Library Scanner**: Automatic detection of available capture methods
-- **Safe Dynamic Loading**: Prevents crashes from missing libraries
+- **WebSocket Log Streaming**: Real-time debugging via browser (port 45678)
+- **Browser-Based Control Panel**: Full service control and monitoring (control port 45677, logs port 45678)
+- **Architecture Framework**: Structured `ICaptureMethod` interface with automatic fallback selection
+- **System Info Detection**: Detects Tizen version and TV capabilities
+- **Capture Method Selector**: Tests and selects best available capture method (when implemented)
+- **Log Level Filtering**: Client-side filtering in browser (Debug/Info/Warning/Error/Performance)
 
-### Technically Complete (But Blocked)
+### Not Yet Implemented
 
-- **T8 API Implementation**: Complete vtable-based IVideoCapture implementation
-  - Correctly implements all Tizen 8 capture interfaces
-  - Blocked by firmware feature flags (returns `-95 EOPNOTSUPP`)
-  - See technical docs below for details
+- **Capture Methods**: All capture method implementations (T8SDK, T7SDK, PixelSampling, etc.) are scaffolding only
+  - No actual frame or pixel capture is currently functional
+  - These are placeholders for future implementation
 
-### Not Working on Tizen 8.0+
+### Research Notes on Tizen 8.0+ Capture
 
-- **Standard Tizen 7 APIs**: Blocked by Samsung firmware
-- **Framebuffer Access**: Restricted by permissions
-- **Hardware Accelerated Capture**: Feature-flagged out by Samsung
+- **Standard APIs**: May have different availability on Tizen 8.0+ compared to earlier versions
+- **Alternative Methods**: Various approaches exist but require implementation and testing
+- **Framework Differences**: Tizen 8.0+ has architectural changes that affect capture capabilities
 
 ---
 
 ## Installation
 
-To install HyperTizen, you need to have a Samsung TV running Tizen (works on both Tizen 7 and Tizen 8+, though capture methods differ).
+**Note:** This is a starter project with capture method scaffolding only. Actual capture functionality needs to be implemented before the app can capture video frames.
 
-You'll need Tizen Studio to install the app on your TV. You can download it from the [official website](https://developer.samsung.com/smarttv/develop/getting-started/setting-up-sdk/installing-tv-sdk.html).
+To install HyperTizen on your Samsung TV running Tizen, you'll need Tizen Studio. You can download it from the [official website](https://developer.samsung.com/smarttv/develop/getting-started/setting-up-sdk/installing-tv-sdk.html).
 
 ### Installation Steps
 
@@ -281,12 +267,12 @@ Tizen 8.0+ capture research and implementation by the community. Special thanks 
 
 ## Contributing
 
-Contributions are welcome! If you have ideas for improving Tizen 8+ capture performance or alternative capture methods, please:
+Contributions are welcome! If you have ideas for implementing capture methods or improving the architecture, please:
 
-1. Check the technical documentation first
-2. Test your changes on actual Tizen 8+ hardware
+1. Review the existing capture method scaffolding in `HyperTizen/Capture/`
+2. Test your changes on actual Tizen hardware
 3. Submit pull requests with detailed explanations
-4. Use the WebSocket log viewer to document behavior
+4. Use the WebSocket log viewer to document behavior and test results
 
 ---
 
@@ -300,4 +286,4 @@ Same as original HyperTizen project.
 
 This is experimental software for research and educational purposes. Use at your own risk. This fork is not affiliated with Samsung or the official Tizen project.
 
-Samsung has intentionally blocked capture APIs on Tizen 8.0+ firmware. This fork explores alternative methods that work around these restrictions, but cannot guarantee compatibility with all TV models or future firmware updates.
+This fork provides scaffolding and structure for exploring capture methods on Tizen 8.0+ TVs. Capture functionality is not yet implemented. Compatibility with specific TV models and firmware versions depends on future implementation and testing.
