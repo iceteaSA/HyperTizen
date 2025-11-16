@@ -16,10 +16,10 @@ namespace HyperTizen
             // STEP 1: Load preferences FIRST (before any testing)
             if (!Preference.Contains("enabled")) Preference.Set("enabled", "false");
 
-            // Set diagnosticMode default based on build constant
-            // Use Globals.DIAGNOSTIC_MODE_ENABLED to control default (false for production)
-            if (!Preference.Contains("diagnosticMode"))
-                Preference.Set("diagnosticMode", Globals.DIAGNOSTIC_MODE_ENABLED ? "true" : "false");
+            // CRITICAL: Force diagnostic mode based on build constant
+            // This OVERRIDES any saved preference to ensure build const is respected
+            // Set Globals.DIAGNOSTIC_MODE_ENABLED = true in code to enable diagnostic mode
+            Preference.Set("diagnosticMode", Globals.DIAGNOSTIC_MODE_ENABLED ? "true" : "false");
 
             // STEP 2: Initialize Globals with preferences
             Globals.Instance.LoadPreferencesEarly();
