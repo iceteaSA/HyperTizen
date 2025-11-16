@@ -144,6 +144,11 @@ namespace HyperTizen
                     Helper.Log.Write(Helper.eLogType.Info, "📡 WebSocket logs are available at http://<TV_IP>:45678");
                     Helper.Log.Write(Helper.eLogType.Info, "");
 
+                    // Wait for WebSocket server to fully initialize
+                    Helper.Log.Write(Helper.eLogType.Info, "Waiting 3 seconds for WebSocket server to initialize...");
+                    Helper.Log.Write(Helper.eLogType.Info, "Connect your browser now to see all logs!");
+                    await Task.Delay(3000);
+
                     // Show start notification
                     try
                     {
@@ -183,11 +188,10 @@ namespace HyperTizen
                         Helper.Log.Write(Helper.eLogType.Warning, $"Could not show notification: {notifEx.Message}");
                     }
 
-                    // Wait longer for user to view logs
+                    // Brief delay for notification visibility, then exit
                     Helper.Log.Write(Helper.eLogType.Info, "");
-                    Helper.Log.Write(Helper.eLogType.Info, "Waiting 10 seconds before exit...");
-                    Helper.Log.Write(Helper.eLogType.Info, "This gives you time to review the logs via WebSocket");
-                    await Task.Delay(10000);
+                    Helper.Log.Write(Helper.eLogType.Info, "Waiting 2 seconds before exit...");
+                    await Task.Delay(2000);
 
                     // Exit the service
                     Helper.Log.Write(Helper.eLogType.Info, "");
