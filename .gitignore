@@ -6,3 +6,4 @@ bin
 *.csproj.user
 .sign
 *.wgt
+references/tizen9_os_files
