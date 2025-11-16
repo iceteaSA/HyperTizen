@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest package="io.gh.reisxd.HyperTizen" version="1.0.0" api-version="6.5" xmlns="http://tizen.org/ns/packages">
+<manifest package="io.gh.reisxd.HyperTizen" version="1.0.0" api-version="9" xmlns="http://tizen.org/ns/packages">
     <author>Reis Can</author>
     <profile name="tv" />
     <service-application appid="io.gh.reisxd.HyperTizen" exec="HyperTizen.dll" multiple="false" nodisplay="true" taskmanage="false" api-version="9" type="dotnet">
@@ -11,6 +11,7 @@
     <privileges>
         <privilege>http://tizen.org/privilege/notification</privilege>
         <privilege>http://tizen.org/privilege/internet</privilege>
+        <privilege>http://tizen.org/privilege/network.get</privilege>
         <privilege>http://tizen.org/privilege/externalstorage</privilege>
         <privilege>http://tizen.org/privilege/mediastorage</privilege>
     </privileges>

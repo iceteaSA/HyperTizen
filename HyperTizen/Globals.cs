@@ -115,10 +115,22 @@ namespace HyperTizen
             Enabled = bool.TryParse(enabledPref, out bool enabledResult) && enabledResult;
             Helper.Log.Write(Helper.eLogType.Info, $"Loaded enabled setting from preferences: {Enabled}");
 
-            // Load diagnostic mode setting from preferences, defaulting to false if not set
-            string diagnosticPref = Preference.Contains("diagnosticMode") ? Preference.Get<string>("diagnosticMode") : "false";
+            // Load diagnostic mode setting from preferences, defaulting to TRUE for safer testing
+            string diagnosticPref = Preference.Contains("diagnosticMode") ? Preference.Get<string>("diagnosticMode") : "true";
             DiagnosticMode = bool.TryParse(diagnosticPref, out bool diagnosticResult) && diagnosticResult;
             Helper.Log.Write(Helper.eLogType.Info, $"Loaded diagnosticMode setting from preferences: {DiagnosticMode}");
+        }
+
+        public void LoadPreferencesEarly()
+        {
+            // Load enabled and diagnosticMode BEFORE any testing
+            string enabledPref = Preference.Contains("enabled") ? Preference.Get<string>("enabled") : "true";
+            Enabled = bool.TryParse(enabledPref, out bool enabledResult) && enabledResult;
+
+            string diagnosticPref = Preference.Contains("diagnosticMode") ? Preference.Get<string>("diagnosticMode") : "true";
+            DiagnosticMode = bool.TryParse(diagnosticPref, out bool diagnosticResult) && diagnosticResult;
+
+            Helper.Log.Write(Helper.eLogType.Info, $"Preferences loaded early - DiagnosticMode: {DiagnosticMode}, Enabled: {Enabled}");
         }
 
         public string ServerIp; //IP of hyperhdr server

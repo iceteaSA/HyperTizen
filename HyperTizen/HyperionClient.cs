@@ -152,53 +152,48 @@ namespace HyperTizen
                         "DIAGNOSTIC MODE ACTIVE - Will pause after initialization");
                 }
 
-                // STEP 5: Test each capture method to find best one
+                // STEP 5: Testing capture methods
                 Helper.Log.Write(Helper.eLogType.Info, "=== STEP 5: Testing capture methods ===");
 
-                try
+                if (!Globals.Instance.DiagnosticMode)
                 {
-                    _captureSelector = new CaptureMethodSelector();
-                    _selectedCaptureMethod = _captureSelector.SelectBestMethod();
+                    Helper.Log.Write(Helper.eLogType.Info, "CaptureMethodSelector: Initializing all capture methods");
 
-                    if (_selectedCaptureMethod == null)
+                    try
                     {
-                        Helper.Log.Write(Helper.eLogType.Error,
-                            "CAPTURE METHOD SELECTION FAILED: No working capture methods found!");
+                        _captureSelector = new CaptureMethodSelector();
 
-                        if (!Globals.Instance.DiagnosticMode)
+                        Helper.Log.Write(Helper.eLogType.Info, "CaptureMethodSelector: Starting capture method selection");
+                        _selectedCaptureMethod = _captureSelector.SelectBestMethod();
+
+                        if (_selectedCaptureMethod == null)
                         {
+                            Helper.Log.Write(Helper.eLogType.Error,
+                                "CAPTURE METHOD SELECTION FAILED: No working capture methods found!");
                             Helper.Log.Write(Helper.eLogType.Error,
                                 "STARTUP ABORTED: Cannot proceed without a working capture method");
                             return;
                         }
                         else
                         {
-                            Helper.Log.Write(Helper.eLogType.Warning,
-                                "DIAGNOSTIC MODE: Continuing despite no capture method...");
+                            Helper.Log.Write(Helper.eLogType.Info,
+                                $"CAPTURE METHOD SELECTED: {_selectedCaptureMethod.Name}");
                         }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        Helper.Log.Write(Helper.eLogType.Info,
-                            $"CAPTURE METHOD SELECTED: {_selectedCaptureMethod.Name}");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Helper.Log.Write(Helper.eLogType.Error,
-                        $"CAPTURE METHOD SELECTION ERROR: {ex.GetType().Name}: {ex.Message}");
-
-                    if (!Globals.Instance.DiagnosticMode)
-                    {
+                        Helper.Log.Write(Helper.eLogType.Error,
+                            $"CAPTURE METHOD SELECTION ERROR: {ex.GetType().Name}: {ex.Message}");
                         Helper.Log.Write(Helper.eLogType.Error,
                             "STARTUP ABORTED: Exception during capture method selection");
                         return;
                     }
-                    else
-                    {
-                        Helper.Log.Write(Helper.eLogType.Warning,
-                            "DIAGNOSTIC MODE: Continuing despite error...");
-                    }
+                }
+                else
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "DIAGNOSTIC MODE: Skipping capture method testing");
+                    Helper.Log.Write(Helper.eLogType.Info, "Capture testing will be skipped - diagnostic mode active");
+                    _selectedCaptureMethod = null;
                 }
 
                 Helper.Log.Write(Helper.eLogType.Info, "=== STEP 6: Cleanup tests (automatic) ===");

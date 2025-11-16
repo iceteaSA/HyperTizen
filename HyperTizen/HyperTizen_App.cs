@@ -1,3 +1,4 @@
+using System;
 using Tizen.Applications;
 using Tizen.Applications.Notifications;
 using Tizen.System;
@@ -11,18 +12,69 @@ namespace HyperTizen
         protected override void OnCreate()
         {
             base.OnCreate();
-            if (!Preference.Contains("enabled")) Preference.Set("enabled", "false");
 
-            // Start WebSocket log server on port 45678
+            // STEP 1: Load preferences FIRST (before any testing)
+            if (!Preference.Contains("enabled")) Preference.Set("enabled", "false");
+            if (!Preference.Contains("diagnosticMode")) Preference.Set("diagnosticMode", "true");
+
+            // STEP 2: Initialize Globals with preferences
+            Globals.Instance.LoadPreferencesEarly();
+
+            // STEP 3: Start WebSocket servers
             Helper.Log.StartWebSocketServer(45678);
 
             // Start WebSocket control server on port 45677 for UI control
-            Task.Run(() => WebSocket.WebSocketServer.StartServerAsync());
-            Helper.Log.Write(Helper.eLogType.Info, "WebSocket control server starting on port 45677");
+            Helper.Log.Write(Helper.eLogType.Info, "Launching control WebSocket server task...");
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await WebSocket.WebSocketServer.StartServerAsync();
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error,
+                        $"Control WebSocket server task crashed: {ex.Message}");
 
-            // Run diagnostics to check which capture APIs are available
-            DiagnosticCapture.RunDiagnostics();
+                    // Show TV notification so user can see the error even without logs
+                    try
+                    {
+                        Notification crashNotif = new Notification
+                        {
+                            Title = "WebSocket Critical Error",
+                            Content = $"Task crashed: {ex.Message}",
+                            Count = 1
+                        };
+                        NotificationManager.Post(crashNotif);
+                    }
+                    catch { /* Ignore notification errors */ }
+                }
+            });
 
+            // STEP 4: Wait for network stack (10 seconds as requested)
+            Helper.Log.Write(Helper.eLogType.Info, "Waiting 10 seconds for network stack initialization...");
+            System.Threading.Thread.Sleep(10000);
+            Helper.Log.Write(Helper.eLogType.Info, "Network stack ready - continuing startup");
+
+            // STEP 5: Run diagnostics (ONLY if not in diagnostic mode)
+            if (!Globals.Instance.DiagnosticMode)
+            {
+                try
+                {
+                    DiagnosticCapture.RunDiagnostics();
+                }
+                catch (Exception ex)
+                {
+                    Helper.Log.Write(Helper.eLogType.Error, $"Diagnostic testing failed: {ex.Message}");
+                    // Continue startup
+                }
+            }
+            else
+            {
+                Helper.Log.Write(Helper.eLogType.Info, "DIAGNOSTIC MODE: Skipping DiagnosticCapture tests");
+            }
+
+            // STEP 6: Continue normal startup
             Display.StateChanged += Display_StateChanged;
             client = new HyperionClient();
 
