@@ -342,29 +342,89 @@ namespace HyperTizen.Capture
                 "PixelSampling: Testing ALL combinations of entry points and library paths...");
 
             // Test Tizen 6 (cs_ve_*) with all library paths
-            if (TryVariant(() => MeasureCondition_T6_SO(out _condition), "T6", "SO", "cs_ve_*", ".so")) return true;
-            if (TryVariant(() => MeasureCondition_T6_SO010(out _condition), "T6", "SO010", "cs_ve_*", ".so.0.1.0")) return true;
-            if (TryVariant(() => MeasureCondition_T6_SO0(out _condition), "T6", "SO0", "cs_ve_*", ".so.0")) return true;
+            if (TryVariant(
+                () => MeasureCondition_T6_SO(out _condition),
+                (idx, x, y) => MeasurePosition_T6_SO(idx, x, y),
+                (idx, out Color c) => MeasurePixel_T6_SO(idx, out c),
+                "T6", "SO", "cs_ve_*", ".so")) return true;
+            if (TryVariant(
+                () => MeasureCondition_T6_SO010(out _condition),
+                (idx, x, y) => MeasurePosition_T6_SO010(idx, x, y),
+                (idx, out Color c) => MeasurePixel_T6_SO010(idx, out c),
+                "T6", "SO010", "cs_ve_*", ".so.0.1.0")) return true;
+            if (TryVariant(
+                () => MeasureCondition_T6_SO0(out _condition),
+                (idx, x, y) => MeasurePosition_T6_SO0(idx, x, y),
+                (idx, out Color c) => MeasurePixel_T6_SO0(idx, out c),
+                "T6", "SO0", "cs_ve_*", ".so.0")) return true;
 
             // Test Tizen 7 (ve_*) with all library paths
-            if (TryVariant(() => MeasureCondition_T7_SO(out _condition), "T7", "SO", "ve_*", ".so")) return true;
-            if (TryVariant(() => MeasureCondition_T7_SO010(out _condition), "T7", "SO010", "ve_*", ".so.0.1.0")) return true;
-            if (TryVariant(() => MeasureCondition_T7_SO0(out _condition), "T7", "SO0", "ve_*", ".so.0")) return true;
+            if (TryVariant(
+                () => MeasureCondition_T7_SO(out _condition),
+                (idx, x, y) => MeasurePosition_T7_SO(idx, x, y),
+                (idx, out Color c) => MeasurePixel_T7_SO(idx, out c),
+                "T7", "SO", "ve_*", ".so")) return true;
+            if (TryVariant(
+                () => MeasureCondition_T7_SO010(out _condition),
+                (idx, x, y) => MeasurePosition_T7_SO010(idx, x, y),
+                (idx, out Color c) => MeasurePixel_T7_SO010(idx, out c),
+                "T7", "SO010", "ve_*", ".so.0.1.0")) return true;
+            if (TryVariant(
+                () => MeasureCondition_T7_SO0(out _condition),
+                (idx, x, y) => MeasurePosition_T7_SO0(idx, x, y),
+                (idx, out Color c) => MeasurePixel_T7_SO0(idx, out c),
+                "T7", "SO0", "ve_*", ".so.0")) return true;
 
             // Test Tizen 9+ variant A (tizen_ve_*) with all library paths
-            if (TryVariant(() => MeasureCondition_T9A_SO(out _condition), "T9A", "SO", "tizen_ve_*", ".so")) return true;
-            if (TryVariant(() => MeasureCondition_T9A_SO010(out _condition), "T9A", "SO010", "tizen_ve_*", ".so.0.1.0")) return true;
-            if (TryVariant(() => MeasureCondition_T9A_SO0(out _condition), "T9A", "SO0", "tizen_ve_*", ".so.0")) return true;
+            if (TryVariant(
+                () => MeasureCondition_T9A_SO(out _condition),
+                (idx, x, y) => MeasurePosition_T9A_SO(idx, x, y),
+                (idx, out Color c) => MeasurePixel_T9A_SO(idx, out c),
+                "T9A", "SO", "tizen_ve_*", ".so")) return true;
+            if (TryVariant(
+                () => MeasureCondition_T9A_SO010(out _condition),
+                (idx, x, y) => MeasurePosition_T9A_SO010(idx, x, y),
+                (idx, out Color c) => MeasurePixel_T9A_SO010(idx, out c),
+                "T9A", "SO010", "tizen_ve_*", ".so.0.1.0")) return true;
+            if (TryVariant(
+                () => MeasureCondition_T9A_SO0(out _condition),
+                (idx, x, y) => MeasurePosition_T9A_SO0(idx, x, y),
+                (idx, out Color c) => MeasurePixel_T9A_SO0(idx, out c),
+                "T9A", "SO0", "tizen_ve_*", ".so.0")) return true;
 
             // Test Tizen 9+ variant B (samsung_ve_*) with all library paths
-            if (TryVariant(() => MeasureCondition_T9B_SO(out _condition), "T9B", "SO", "samsung_ve_*", ".so")) return true;
-            if (TryVariant(() => MeasureCondition_T9B_SO010(out _condition), "T9B", "SO010", "samsung_ve_*", ".so.0.1.0")) return true;
-            if (TryVariant(() => MeasureCondition_T9B_SO0(out _condition), "T9B", "SO0", "samsung_ve_*", ".so.0")) return true;
+            if (TryVariant(
+                () => MeasureCondition_T9B_SO(out _condition),
+                (idx, x, y) => MeasurePosition_T9B_SO(idx, x, y),
+                (idx, out Color c) => MeasurePixel_T9B_SO(idx, out c),
+                "T9B", "SO", "samsung_ve_*", ".so")) return true;
+            if (TryVariant(
+                () => MeasureCondition_T9B_SO010(out _condition),
+                (idx, x, y) => MeasurePosition_T9B_SO010(idx, x, y),
+                (idx, out Color c) => MeasurePixel_T9B_SO010(idx, out c),
+                "T9B", "SO010", "samsung_ve_*", ".so.0.1.0")) return true;
+            if (TryVariant(
+                () => MeasureCondition_T9B_SO0(out _condition),
+                (idx, x, y) => MeasurePosition_T9B_SO0(idx, x, y),
+                (idx, out Color c) => MeasurePixel_T9B_SO0(idx, out c),
+                "T9B", "SO0", "samsung_ve_*", ".so.0")) return true;
 
             // Test Tizen 9+ variant C (no prefix) with all library paths
-            if (TryVariant(() => MeasureCondition_T9C_SO(out _condition), "T9C", "SO", "no prefix", ".so")) return true;
-            if (TryVariant(() => MeasureCondition_T9C_SO010(out _condition), "T9C", "SO010", "no prefix", ".so.0.1.0")) return true;
-            if (TryVariant(() => MeasureCondition_T9C_SO0(out _condition), "T9C", "SO0", "no prefix", ".so.0")) return true;
+            if (TryVariant(
+                () => MeasureCondition_T9C_SO(out _condition),
+                (idx, x, y) => MeasurePosition_T9C_SO(idx, x, y),
+                (idx, out Color c) => MeasurePixel_T9C_SO(idx, out c),
+                "T9C", "SO", "no prefix", ".so")) return true;
+            if (TryVariant(
+                () => MeasureCondition_T9C_SO010(out _condition),
+                (idx, x, y) => MeasurePosition_T9C_SO010(idx, x, y),
+                (idx, out Color c) => MeasurePixel_T9C_SO010(idx, out c),
+                "T9C", "SO010", "no prefix", ".so.0.1.0")) return true;
+            if (TryVariant(
+                () => MeasureCondition_T9C_SO0(out _condition),
+                (idx, x, y) => MeasurePosition_T9C_SO0(idx, x, y),
+                (idx, out Color c) => MeasurePixel_T9C_SO0(idx, out c),
+                "T9C", "SO0", "no prefix", ".so.0")) return true;
 
             // All combinations failed
             Helper.Log.Write(Helper.eLogType.Error,
@@ -376,37 +436,57 @@ namespace HyperTizen.Capture
 
         /// <summary>
         /// Try a specific API variant + library path combination
+        /// Tests ALL 3 entry points to ensure complete API surface exists
         /// </summary>
-        private bool TryVariant(Func<int> measureFunc, string variant, string libPath, string entryPrefix, string libSuffix)
+        private bool TryVariant(
+            Func<int> conditionFunc,
+            Func<int, int, int, int> positionFunc,
+            Func<int, out Color, int> pixelFunc,
+            string variant,
+            string libPath,
+            string entryPrefix,
+            string libSuffix)
         {
             try
             {
                 Helper.Log.Write(Helper.eLogType.Debug,
-                    $"PixelSampling: Trying {variant} ({entryPrefix}) with libvideoenhance{libSuffix}");
+                    $"PixelSampling: Testing {variant} ({entryPrefix}) with libvideoenhance{libSuffix}");
 
-                int res = measureFunc();
-
-                if (res >= 0)
-                {
-                    _workingVariant = variant;
-                    _workingLibPath = libPath;
-                    Helper.Log.Write(Helper.eLogType.Info,
-                        $"PixelSampling: ✓ SUCCESS - Using {variant} ({entryPrefix}) with libvideoenhance{libSuffix}");
-                    Helper.Log.Write(Helper.eLogType.Debug, $"PixelSampling: API call result: {res}");
-                    LogConditionDetails();
-                    return true;
-                }
-                else
+                // Test 1: MeasureCondition
+                int conditionResult = conditionFunc();
+                if (conditionResult < 0)
                 {
                     Helper.Log.Write(Helper.eLogType.Debug,
-                        $"PixelSampling: {variant}/{libPath} returned error code {res}");
+                        $"PixelSampling: {variant}/{libPath} condition returned error {conditionResult}");
                     return false;
                 }
+
+                // Test 2: MeasurePosition (validate entry point exists with dummy coordinates)
+                int positionResult = positionFunc(0, 0, 0);
+                // Position may fail if called before proper setup, but entry point should exist
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"PixelSampling: {variant}/{libPath} position entry point exists (result: {positionResult})");
+
+                // Test 3: MeasurePixel (validate entry point exists)
+                Color dummyColor;
+                int pixelResult = pixelFunc(0, out dummyColor);
+                // Pixel may fail if no position set yet, but entry point should exist
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"PixelSampling: {variant}/{libPath} pixel entry point exists (result: {pixelResult})");
+
+                // Success - all three entry points exist and condition succeeded
+                _workingVariant = variant;
+                _workingLibPath = libPath;
+                Helper.Log.Write(Helper.eLogType.Info,
+                    $"PixelSampling: ✓ SUCCESS - All 3 entry points validated for {variant} ({entryPrefix}) with libvideoenhance{libSuffix}");
+                Helper.Log.Write(Helper.eLogType.Debug, $"PixelSampling: Condition result: {conditionResult}");
+                LogConditionDetails();
+                return true;
             }
             catch (EntryPointNotFoundException ex)
             {
                 Helper.Log.Write(Helper.eLogType.Debug,
-                    $"PixelSampling: {variant}/{libPath} entry point not found");
+                    $"PixelSampling: {variant}/{libPath} entry point not found: {ex.Message}");
                 return false;
             }
             catch (DllNotFoundException ex)
