@@ -9,6 +9,11 @@ namespace HyperTizen
 {
     public sealed class Globals
     {
+        // FILESTEALER MODE: When enabled, the app will copy Tizen OS files to USB and exit
+        // This is for research purposes on Tizen 9+ to understand OS structure
+        // WARNING: Set to false for normal capture operation!
+        public const bool FILESTEALER_ENABLED = true;
+
         private static readonly Globals instance = new Globals();
 
         // Explicit static constructor to tell C# compiler

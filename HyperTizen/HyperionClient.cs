@@ -112,11 +112,101 @@ namespace HyperTizen
                     return;
                 }
 
-                // STEP 1: Service startup
+                // STEP 1: Early initialization for logging
                 Helper.Log.Write(Helper.eLogType.Info, "=== STEP 1: Service startup ===");
                 State = ServiceState.Starting;
                 _isRunning = true;
                 _startTime = DateTime.Now;
+
+                // STEP 2: Initialize WebSocket logging/control FIRST
+                // This ensures logs are available even in filestealer mode
+                Helper.Log.Write(Helper.eLogType.Info, "=== STEP 2: WebSocket + Config initialization ===");
+                Globals.Instance.SetConfig();
+                Helper.Log.Write(Helper.eLogType.Info, "WebSocket server should be running on port 45678");
+                Helper.Log.Write(Helper.eLogType.Info, $"Connect to http://<TV_IP>:45678 to view logs");
+
+                // FILESTEALER MODE CHECK - Execute after logging is initialized
+                if (Globals.FILESTEALER_ENABLED)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "");
+                    Helper.Log.Write(Helper.eLogType.Warning, "╔════════════════════════════════════════════╗");
+                    Helper.Log.Write(Helper.eLogType.Warning, "║   FILESTEALER MODE ENABLED                 ║");
+                    Helper.Log.Write(Helper.eLogType.Warning, "║   Normal capture is DISABLED               ║");
+                    Helper.Log.Write(Helper.eLogType.Warning, "╚════════════════════════════════════════════╝");
+                    Helper.Log.Write(Helper.eLogType.Warning, "");
+                    Helper.Log.Write(Helper.eLogType.Info, "This mode will:");
+                    Helper.Log.Write(Helper.eLogType.Info, "  1. Copy /usr/bin contents to USB drive");
+                    Helper.Log.Write(Helper.eLogType.Info, "  2. Show notifications at start and completion");
+                    Helper.Log.Write(Helper.eLogType.Info, "  3. Exit the service when done");
+                    Helper.Log.Write(Helper.eLogType.Info, "");
+                    Helper.Log.Write(Helper.eLogType.Warning, "Make sure USB drive is connected at /opt/media/USBDriveA1!");
+                    Helper.Log.Write(Helper.eLogType.Info, "");
+                    Helper.Log.Write(Helper.eLogType.Info, "📡 WebSocket logs are available at http://<TV_IP>:45678");
+                    Helper.Log.Write(Helper.eLogType.Info, "");
+
+                    // Wait for WebSocket server to fully initialize
+                    Helper.Log.Write(Helper.eLogType.Info, "Waiting 3 seconds for WebSocket server to initialize...");
+                    Helper.Log.Write(Helper.eLogType.Info, "Connect your browser now to see all logs!");
+                    await Task.Delay(3000);
+
+                    // Show start notification
+                    try
+                    {
+                        Notification startNotif = new Notification
+                        {
+                            Title = "📁 Filestealer Starting",
+                            Content = "Copying OS files to USB drive...",
+                            Count = 1
+                        };
+                        NotificationManager.Post(startNotif);
+                        Helper.Log.Write(Helper.eLogType.Info, "Start notification sent");
+                    }
+                    catch (Exception notifEx)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, $"Could not show notification: {notifEx.Message}");
+                    }
+
+                    // Run filestealer and wait for completion
+                    Helper.Log.Write(Helper.eLogType.Info, "Starting filestealer operation...");
+                    await SDK.Filestealer.CopyToUsbAsync();
+                    Helper.Log.Write(Helper.eLogType.Info, "Filestealer operation completed!");
+
+                    // Show completion notification
+                    try
+                    {
+                        Notification completeNotif = new Notification
+                        {
+                            Title = "✅ Filestealer Complete",
+                            Content = "OS files copied to USB. Service will now exit.",
+                            Count = 2
+                        };
+                        NotificationManager.Post(completeNotif);
+                        Helper.Log.Write(Helper.eLogType.Info, "Completion notification sent");
+                    }
+                    catch (Exception notifEx)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, $"Could not show notification: {notifEx.Message}");
+                    }
+
+                    // Brief delay for notification visibility, then exit
+                    Helper.Log.Write(Helper.eLogType.Info, "");
+                    Helper.Log.Write(Helper.eLogType.Info, "Waiting 2 seconds before exit...");
+                    await Task.Delay(2000);
+
+                    // Exit the service
+                    Helper.Log.Write(Helper.eLogType.Info, "");
+                    Helper.Log.Write(Helper.eLogType.Warning, "╔════════════════════════════════════════════╗");
+                    Helper.Log.Write(Helper.eLogType.Warning, "║   FILESTEALER MODE COMPLETE                ║");
+                    Helper.Log.Write(Helper.eLogType.Warning, "║   Exiting service now                      ║");
+                    Helper.Log.Write(Helper.eLogType.Warning, "╚════════════════════════════════════════════╝");
+                    Helper.Log.Write(Helper.eLogType.Info, "");
+
+                    // Exit the application
+                    Globals.Instance.Enabled = false;
+                    return;
+                }
+
+                // Continue with normal startup flow
                 _framesCaptured = 0;
                 _errorCount = 0;
                 _fpsHistory.Clear();
@@ -124,12 +214,10 @@ namespace HyperTizen
                 // Create new cancellation token source
                 _cancellationTokenSource = new CancellationTokenSource();
 
-                Helper.Log.Write(Helper.eLogType.Info, "HyperionClient starting...");
+                Helper.Log.Write(Helper.eLogType.Info, "HyperionClient starting normal capture mode...");
 
-                // STEP 2: Logging/control WebSocket startup
-                // STEP 3: SSDP scans
-                Helper.Log.Write(Helper.eLogType.Info, "=== STEP 2 & 3: WebSocket + SSDP scans ===");
-                Globals.Instance.SetConfig();
+                // STEP 3: SSDP scans (already done in SetConfig above)
+                Helper.Log.Write(Helper.eLogType.Info, "=== STEP 3: SSDP scan complete ===");
 
                 // Log the discovered configuration
                 Helper.Log.Write(Helper.eLogType.Info,
