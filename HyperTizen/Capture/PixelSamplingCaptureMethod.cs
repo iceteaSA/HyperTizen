@@ -375,6 +375,16 @@ namespace HyperTizen.Capture
                     LogConditionDetails();
                     return true;
                 }
+                else
+                {
+                    Helper.Log.Write(Helper.eLogType.Error,
+                        $"PixelSampling: ALL API variants failed - last attempt (variant C) returned error code {res}");
+
+                    // List available entry points for diagnostics
+                    LogAvailableEntryPoints();
+
+                    return false;
+                }
             }
             catch (EntryPointNotFoundException ex)
             {
