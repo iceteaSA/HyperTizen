@@ -16,7 +16,10 @@ namespace HyperTizen.Capture
     {
         private bool _isInitialized = false;
         private Condition _condition;
-        private bool _usingTizen7Api = false; // Track which API variant works
+
+        // Track which API variant and library path works
+        private string _workingVariant = null; // T6, T7, T9A, T9B, T9C
+        private string _workingLibPath = null; // SO, SO010, SO0
 
         // Default 16-point sampling grid (normalized coordinates 0.0-1.0)
         // Maps to screen edges for ambient lighting effect
@@ -49,68 +52,180 @@ namespace HyperTizen.Capture
 
         #region P/Invoke Declarations
 
-        // Tizen 6 API (cs_ve_* prefix)
+        // ===== Tizen 6 API (cs_ve_* prefix) - Test all library paths =====
+
+        // Library: /usr/lib/libvideoenhance.so
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "cs_ve_get_rgb_measure_condition")]
-        private static extern int MeasureCondition(out Condition condition);
-
+        private static extern int MeasureCondition_T6_SO(out Condition condition);
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "cs_ve_set_rgb_measure_position")]
-        private static extern int MeasurePosition(int index, int x, int y);
-
+        private static extern int MeasurePosition_T6_SO(int index, int x, int y);
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "cs_ve_get_rgb_measure_pixel")]
-        private static extern int MeasurePixel(int index, out Color color);
+        private static extern int MeasurePixel_T6_SO(int index, out Color color);
 
-        // Tizen 7+ API (ve_* prefix)
+        // Library: /usr/lib/libvideoenhance.so.0.1.0
+        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "cs_ve_get_rgb_measure_condition")]
+        private static extern int MeasureCondition_T6_SO010(out Condition condition);
+        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "cs_ve_set_rgb_measure_position")]
+        private static extern int MeasurePosition_T6_SO010(int index, int x, int y);
+        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "cs_ve_get_rgb_measure_pixel")]
+        private static extern int MeasurePixel_T6_SO010(int index, out Color color);
+
+        // Library: /usr/lib/libvideoenhance.so.0
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "cs_ve_get_rgb_measure_condition")]
+        private static extern int MeasureCondition_T6_SO0(out Condition condition);
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "cs_ve_set_rgb_measure_position")]
+        private static extern int MeasurePosition_T6_SO0(int index, int x, int y);
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "cs_ve_get_rgb_measure_pixel")]
+        private static extern int MeasurePixel_T6_SO0(int index, out Color color);
+
+        // ===== Tizen 7 API (ve_* prefix) - Test all library paths =====
+
+        // Library: /usr/lib/libvideoenhance.so
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "ve_get_rgb_measure_condition")]
-        private static extern int MeasureCondition7(out Condition condition);
-
+        private static extern int MeasureCondition_T7_SO(out Condition condition);
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "ve_set_rgb_measure_position")]
-        private static extern int MeasurePosition7(int index, int x, int y);
-
+        private static extern int MeasurePosition_T7_SO(int index, int x, int y);
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "ve_get_rgb_measure_pixel")]
-        private static extern int MeasurePixel7(int index, out Color color);
+        private static extern int MeasurePixel_T7_SO(int index, out Color color);
 
-        // Tizen 9+ API variants (potential naming patterns to test)
+        // Library: /usr/lib/libvideoenhance.so.0.1.0
+        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "ve_get_rgb_measure_condition")]
+        private static extern int MeasureCondition_T7_SO010(out Condition condition);
+        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "ve_set_rgb_measure_position")]
+        private static extern int MeasurePosition_T7_SO010(int index, int x, int y);
+        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "ve_get_rgb_measure_pixel")]
+        private static extern int MeasurePixel_T7_SO010(int index, out Color color);
+
+        // Library: /usr/lib/libvideoenhance.so.0
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "ve_get_rgb_measure_condition")]
+        private static extern int MeasureCondition_T7_SO0(out Condition condition);
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "ve_set_rgb_measure_position")]
+        private static extern int MeasurePosition_T7_SO0(int index, int x, int y);
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "ve_get_rgb_measure_pixel")]
+        private static extern int MeasurePixel_T7_SO0(int index, out Color color);
+
+        // ===== Tizen 9+ API variant A (tizen_ve_* prefix) - Test all library paths =====
+
+        // Library: /usr/lib/libvideoenhance.so
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "tizen_ve_get_rgb_measure_condition")]
-        private static extern int MeasureCondition9A(out Condition condition);
-
+        private static extern int MeasureCondition_T9A_SO(out Condition condition);
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "tizen_ve_set_rgb_measure_position")]
-        private static extern int MeasurePosition9A(int index, int x, int y);
-
+        private static extern int MeasurePosition_T9A_SO(int index, int x, int y);
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "tizen_ve_get_rgb_measure_pixel")]
-        private static extern int MeasurePixel9A(int index, out Color color);
+        private static extern int MeasurePixel_T9A_SO(int index, out Color color);
 
+        // Library: /usr/lib/libvideoenhance.so.0.1.0
+        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "tizen_ve_get_rgb_measure_condition")]
+        private static extern int MeasureCondition_T9A_SO010(out Condition condition);
+        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "tizen_ve_set_rgb_measure_position")]
+        private static extern int MeasurePosition_T9A_SO010(int index, int x, int y);
+        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "tizen_ve_get_rgb_measure_pixel")]
+        private static extern int MeasurePixel_T9A_SO010(int index, out Color color);
+
+        // Library: /usr/lib/libvideoenhance.so.0
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "tizen_ve_get_rgb_measure_condition")]
+        private static extern int MeasureCondition_T9A_SO0(out Condition condition);
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "tizen_ve_set_rgb_measure_position")]
+        private static extern int MeasurePosition_T9A_SO0(int index, int x, int y);
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "tizen_ve_get_rgb_measure_pixel")]
+        private static extern int MeasurePixel_T9A_SO0(int index, out Color color);
+
+        // ===== Tizen 9+ API variant B (samsung_ve_* prefix) - Test all library paths =====
+
+        // Library: /usr/lib/libvideoenhance.so
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "samsung_ve_get_rgb_measure_condition")]
-        private static extern int MeasureCondition9B(out Condition condition);
-
+        private static extern int MeasureCondition_T9B_SO(out Condition condition);
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "samsung_ve_set_rgb_measure_position")]
-        private static extern int MeasurePosition9B(int index, int x, int y);
-
+        private static extern int MeasurePosition_T9B_SO(int index, int x, int y);
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "samsung_ve_get_rgb_measure_pixel")]
-        private static extern int MeasurePixel9B(int index, out Color color);
+        private static extern int MeasurePixel_T9B_SO(int index, out Color color);
 
+        // Library: /usr/lib/libvideoenhance.so.0.1.0
+        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "samsung_ve_get_rgb_measure_condition")]
+        private static extern int MeasureCondition_T9B_SO010(out Condition condition);
+        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "samsung_ve_set_rgb_measure_position")]
+        private static extern int MeasurePosition_T9B_SO010(int index, int x, int y);
+        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "samsung_ve_get_rgb_measure_pixel")]
+        private static extern int MeasurePixel_T9B_SO010(int index, out Color color);
+
+        // Library: /usr/lib/libvideoenhance.so.0
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "samsung_ve_get_rgb_measure_condition")]
+        private static extern int MeasureCondition_T9B_SO0(out Condition condition);
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "samsung_ve_set_rgb_measure_position")]
+        private static extern int MeasurePosition_T9B_SO0(int index, int x, int y);
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "samsung_ve_get_rgb_measure_pixel")]
+        private static extern int MeasurePixel_T9B_SO0(int index, out Color color);
+
+        // ===== Tizen 9+ API variant C (no prefix) - Test all library paths =====
+
+        // Library: /usr/lib/libvideoenhance.so
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "get_rgb_measure_condition")]
-        private static extern int MeasureCondition9C(out Condition condition);
-
+        private static extern int MeasureCondition_T9C_SO(out Condition condition);
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "set_rgb_measure_position")]
-        private static extern int MeasurePosition9C(int index, int x, int y);
-
+        private static extern int MeasurePosition_T9C_SO(int index, int x, int y);
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "get_rgb_measure_pixel")]
-        private static extern int MeasurePixel9C(int index, out Color color);
+        private static extern int MeasurePixel_T9C_SO(int index, out Color color);
+
+        // Library: /usr/lib/libvideoenhance.so.0.1.0
+        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "get_rgb_measure_condition")]
+        private static extern int MeasureCondition_T9C_SO010(out Condition condition);
+        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "set_rgb_measure_position")]
+        private static extern int MeasurePosition_T9C_SO010(int index, int x, int y);
+        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "get_rgb_measure_pixel")]
+        private static extern int MeasurePixel_T9C_SO010(int index, out Color color);
+
+        // Library: /usr/lib/libvideoenhance.so.0
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "get_rgb_measure_condition")]
+        private static extern int MeasureCondition_T9C_SO0(out Condition condition);
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "set_rgb_measure_position")]
+        private static extern int MeasurePosition_T9C_SO0(int index, int x, int y);
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "get_rgb_measure_pixel")]
+        private static extern int MeasurePixel_T9C_SO0(int index, out Color color);
 
         #endregion
 
@@ -213,173 +328,97 @@ namespace HyperTizen.Capture
 
         /// <summary>
         /// Get screen condition parameters from VideoEnhance library
-        /// Uses API fallback: Try multiple Tizen API variants (6, 7, 9+)
+        /// Tests ALL combinations of API variants and library paths systematically
         /// </summary>
         private bool GetCondition()
         {
-            int res = -1;
-
             // TODO: DIAGNOSTIC - Remove struct size logging after verification
             Helper.Log.Write(Helper.eLogType.Debug,
                 $"PixelSampling: Condition struct size: {Marshal.SizeOf<Condition>()} bytes");
             Helper.Log.Write(Helper.eLogType.Debug,
                 $"PixelSampling: Color struct size: {Marshal.SizeOf<Color>()} bytes");
 
-            // Try Tizen 6 API first (cs_ve_get_rgb_measure_condition)
+            Helper.Log.Write(Helper.eLogType.Info,
+                "PixelSampling: Testing ALL combinations of entry points and library paths...");
+
+            // Test Tizen 6 (cs_ve_*) with all library paths
+            if (TryVariant(() => MeasureCondition_T6_SO(out _condition), "T6", "SO", "cs_ve_*", ".so")) return true;
+            if (TryVariant(() => MeasureCondition_T6_SO010(out _condition), "T6", "SO010", "cs_ve_*", ".so.0.1.0")) return true;
+            if (TryVariant(() => MeasureCondition_T6_SO0(out _condition), "T6", "SO0", "cs_ve_*", ".so.0")) return true;
+
+            // Test Tizen 7 (ve_*) with all library paths
+            if (TryVariant(() => MeasureCondition_T7_SO(out _condition), "T7", "SO", "ve_*", ".so")) return true;
+            if (TryVariant(() => MeasureCondition_T7_SO010(out _condition), "T7", "SO010", "ve_*", ".so.0.1.0")) return true;
+            if (TryVariant(() => MeasureCondition_T7_SO0(out _condition), "T7", "SO0", "ve_*", ".so.0")) return true;
+
+            // Test Tizen 9+ variant A (tizen_ve_*) with all library paths
+            if (TryVariant(() => MeasureCondition_T9A_SO(out _condition), "T9A", "SO", "tizen_ve_*", ".so")) return true;
+            if (TryVariant(() => MeasureCondition_T9A_SO010(out _condition), "T9A", "SO010", "tizen_ve_*", ".so.0.1.0")) return true;
+            if (TryVariant(() => MeasureCondition_T9A_SO0(out _condition), "T9A", "SO0", "tizen_ve_*", ".so.0")) return true;
+
+            // Test Tizen 9+ variant B (samsung_ve_*) with all library paths
+            if (TryVariant(() => MeasureCondition_T9B_SO(out _condition), "T9B", "SO", "samsung_ve_*", ".so")) return true;
+            if (TryVariant(() => MeasureCondition_T9B_SO010(out _condition), "T9B", "SO010", "samsung_ve_*", ".so.0.1.0")) return true;
+            if (TryVariant(() => MeasureCondition_T9B_SO0(out _condition), "T9B", "SO0", "samsung_ve_*", ".so.0")) return true;
+
+            // Test Tizen 9+ variant C (no prefix) with all library paths
+            if (TryVariant(() => MeasureCondition_T9C_SO(out _condition), "T9C", "SO", "no prefix", ".so")) return true;
+            if (TryVariant(() => MeasureCondition_T9C_SO010(out _condition), "T9C", "SO010", "no prefix", ".so.0.1.0")) return true;
+            if (TryVariant(() => MeasureCondition_T9C_SO0(out _condition), "T9C", "SO0", "no prefix", ".so.0")) return true;
+
+            // All combinations failed
+            Helper.Log.Write(Helper.eLogType.Error,
+                "PixelSampling: ALL 15 combinations failed (5 entry point variants × 3 library paths)");
+            Helper.Log.Write(Helper.eLogType.Error,
+                "PixelSampling: libvideoenhance.so does not support RGB pixel sampling on this Tizen version");
+            return false;
+        }
+
+        /// <summary>
+        /// Try a specific API variant + library path combination
+        /// </summary>
+        private bool TryVariant(Func<int> measureFunc, string variant, string libPath, string entryPrefix, string libSuffix)
+        {
             try
             {
-                Helper.Log.Write(Helper.eLogType.Debug, "PixelSampling: Trying Tizen 6 API (cs_ve_*)");
-                res = MeasureCondition(out _condition);
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"PixelSampling: Trying {variant} ({entryPrefix}) with libvideoenhance{libSuffix}");
+
+                int res = measureFunc();
 
                 if (res >= 0)
                 {
-                    _usingTizen7Api = false;
-                    Helper.Log.Write(Helper.eLogType.Info, "PixelSampling: Using Tizen 6 API (cs_ve_*)");
-                    Helper.Log.Write(Helper.eLogType.Debug, $"PixelSampling: MeasureCondition result: {res}");
+                    _workingVariant = variant;
+                    _workingLibPath = libPath;
+                    Helper.Log.Write(Helper.eLogType.Info,
+                        $"PixelSampling: ✓ SUCCESS - Using {variant} ({entryPrefix}) with libvideoenhance{libSuffix}");
+                    Helper.Log.Write(Helper.eLogType.Debug, $"PixelSampling: API call result: {res}");
                     LogConditionDetails();
                     return true;
                 }
                 else
                 {
-                    Helper.Log.Write(Helper.eLogType.Warning,
-                        $"PixelSampling: Tizen 6 API failed with error code {res}, trying next variant");
-                }
-            }
-            catch (EntryPointNotFoundException)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug,
-                    "PixelSampling: Tizen 6 API entry point not found, trying next variant");
-            }
-            catch (DllNotFoundException ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Error,
-                    $"PixelSampling: Library not found: {ex.Message}");
-                return false;
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Warning,
-                    $"PixelSampling: Tizen 6 API exception: {ex.GetType().Name}: {ex.Message}, trying next variant");
-            }
-
-            // Try Tizen 7+ API (ve_get_rgb_measure_condition)
-            try
-            {
-                Helper.Log.Write(Helper.eLogType.Debug, "PixelSampling: Trying Tizen 7+ API (ve_*)");
-                res = MeasureCondition7(out _condition);
-
-                if (res >= 0)
-                {
-                    _usingTizen7Api = true;
-                    Helper.Log.Write(Helper.eLogType.Info, "PixelSampling: Using Tizen 7+ API (ve_*)");
-                    Helper.Log.Write(Helper.eLogType.Debug, $"PixelSampling: MeasureCondition7 result: {res}");
-                    LogConditionDetails();
-                    return true;
-                }
-                else
-                {
-                    Helper.Log.Write(Helper.eLogType.Warning,
-                        $"PixelSampling: Tizen 7+ API failed with error code {res}, trying Tizen 9+ variants");
-                }
-            }
-            catch (EntryPointNotFoundException)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug,
-                    "PixelSampling: Tizen 7+ API entry point not found, trying Tizen 9+ variants");
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Warning,
-                    $"PixelSampling: Tizen 7+ API exception: {ex.GetType().Name}: {ex.Message}, trying Tizen 9+ variants");
-            }
-
-            // Try Tizen 9+ API variant A (tizen_ve_*)
-            try
-            {
-                Helper.Log.Write(Helper.eLogType.Debug, "PixelSampling: Trying Tizen 9+ API variant A (tizen_ve_*)");
-                res = MeasureCondition9A(out _condition);
-
-                if (res >= 0)
-                {
-                    _usingTizen7Api = true; // Will use the 9A variants in GetColors
-                    Helper.Log.Write(Helper.eLogType.Info, "PixelSampling: Using Tizen 9+ API variant A (tizen_ve_*)");
-                    Helper.Log.Write(Helper.eLogType.Debug, $"PixelSampling: MeasureCondition9A result: {res}");
-                    LogConditionDetails();
-                    return true;
-                }
-            }
-            catch (EntryPointNotFoundException)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug,
-                    "PixelSampling: Tizen 9+ API variant A entry point not found, trying variant B");
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug,
-                    $"PixelSampling: Tizen 9+ API variant A exception: {ex.GetType().Name}: {ex.Message}");
-            }
-
-            // Try Tizen 9+ API variant B (samsung_ve_*)
-            try
-            {
-                Helper.Log.Write(Helper.eLogType.Debug, "PixelSampling: Trying Tizen 9+ API variant B (samsung_ve_*)");
-                res = MeasureCondition9B(out _condition);
-
-                if (res >= 0)
-                {
-                    _usingTizen7Api = true; // Will use the 9B variants in GetColors
-                    Helper.Log.Write(Helper.eLogType.Info, "PixelSampling: Using Tizen 9+ API variant B (samsung_ve_*)");
-                    Helper.Log.Write(Helper.eLogType.Debug, $"PixelSampling: MeasureCondition9B result: {res}");
-                    LogConditionDetails();
-                    return true;
-                }
-            }
-            catch (EntryPointNotFoundException)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug,
-                    "PixelSampling: Tizen 9+ API variant B entry point not found, trying variant C");
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug,
-                    $"PixelSampling: Tizen 9+ API variant B exception: {ex.GetType().Name}: {ex.Message}");
-            }
-
-            // Try Tizen 9+ API variant C (no prefix)
-            try
-            {
-                Helper.Log.Write(Helper.eLogType.Debug, "PixelSampling: Trying Tizen 9+ API variant C (no prefix)");
-                res = MeasureCondition9C(out _condition);
-
-                if (res >= 0)
-                {
-                    _usingTizen7Api = true; // Will use the 9C variants in GetColors
-                    Helper.Log.Write(Helper.eLogType.Info, "PixelSampling: Using Tizen 9+ API variant C (no prefix)");
-                    Helper.Log.Write(Helper.eLogType.Debug, $"PixelSampling: MeasureCondition9C result: {res}");
-                    LogConditionDetails();
-                    return true;
-                }
-                else
-                {
-                    Helper.Log.Write(Helper.eLogType.Error,
-                        $"PixelSampling: ALL API variants failed - last attempt (variant C) returned error code {res}");
-                    Helper.Log.Write(Helper.eLogType.Error,
-                        "PixelSampling: libvideoenhance.so may not support RGB pixel sampling on this Tizen version");
+                    Helper.Log.Write(Helper.eLogType.Debug,
+                        $"PixelSampling: {variant}/{libPath} returned error code {res}");
                     return false;
                 }
             }
             catch (EntryPointNotFoundException ex)
             {
-                Helper.Log.Write(Helper.eLogType.Error,
-                    $"PixelSampling: Tizen 9+ API variant C entry point not found: {ex.Message}");
-                Helper.Log.Write(Helper.eLogType.Error,
-                    "PixelSampling: ALL API variants failed - library incompatible with this Tizen version");
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"PixelSampling: {variant}/{libPath} entry point not found");
+                return false;
+            }
+            catch (DllNotFoundException ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"PixelSampling: {variant}/{libPath} library file not found: {ex.Message}");
                 return false;
             }
             catch (Exception ex)
             {
-                Helper.Log.Write(Helper.eLogType.Error,
-                    $"PixelSampling: Tizen 9+ API variant C exception: {ex.GetType().Name}: {ex.Message}");
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"PixelSampling: {variant}/{libPath} exception: {ex.GetType().Name}: {ex.Message}");
                 return false;
             }
         }
@@ -393,6 +432,62 @@ namespace HyperTizen.Capture
                 $"PixelSampling: Condition - Width: {_condition.Width}, Height: {_condition.Height}, " +
                 $"Points: {_condition.ScreenCapturePoints}, PixelDensity: {_condition.PixelDensityX}x{_condition.PixelDensityY}, " +
                 $"Sleep: {_condition.SleepMS}ms");
+        }
+
+        /// <summary>
+        /// Call correct MeasurePosition variant based on working combination
+        /// </summary>
+        private int CallMeasurePosition(int index, int x, int y)
+        {
+            string key = $"{_workingVariant}_{_workingLibPath}";
+            switch (key)
+            {
+                case "T6_SO": return MeasurePosition_T6_SO(index, x, y);
+                case "T6_SO010": return MeasurePosition_T6_SO010(index, x, y);
+                case "T6_SO0": return MeasurePosition_T6_SO0(index, x, y);
+                case "T7_SO": return MeasurePosition_T7_SO(index, x, y);
+                case "T7_SO010": return MeasurePosition_T7_SO010(index, x, y);
+                case "T7_SO0": return MeasurePosition_T7_SO0(index, x, y);
+                case "T9A_SO": return MeasurePosition_T9A_SO(index, x, y);
+                case "T9A_SO010": return MeasurePosition_T9A_SO010(index, x, y);
+                case "T9A_SO0": return MeasurePosition_T9A_SO0(index, x, y);
+                case "T9B_SO": return MeasurePosition_T9B_SO(index, x, y);
+                case "T9B_SO010": return MeasurePosition_T9B_SO010(index, x, y);
+                case "T9B_SO0": return MeasurePosition_T9B_SO0(index, x, y);
+                case "T9C_SO": return MeasurePosition_T9C_SO(index, x, y);
+                case "T9C_SO010": return MeasurePosition_T9C_SO010(index, x, y);
+                case "T9C_SO0": return MeasurePosition_T9C_SO0(index, x, y);
+                default:
+                    throw new InvalidOperationException($"Unknown variant: {key}");
+            }
+        }
+
+        /// <summary>
+        /// Call correct MeasurePixel variant based on working combination
+        /// </summary>
+        private int CallMeasurePixel(int index, out Color color)
+        {
+            string key = $"{_workingVariant}_{_workingLibPath}";
+            switch (key)
+            {
+                case "T6_SO": return MeasurePixel_T6_SO(index, out color);
+                case "T6_SO010": return MeasurePixel_T6_SO010(index, out color);
+                case "T6_SO0": return MeasurePixel_T6_SO0(index, out color);
+                case "T7_SO": return MeasurePixel_T7_SO(index, out color);
+                case "T7_SO010": return MeasurePixel_T7_SO010(index, out color);
+                case "T7_SO0": return MeasurePixel_T7_SO0(index, out color);
+                case "T9A_SO": return MeasurePixel_T9A_SO(index, out color);
+                case "T9A_SO010": return MeasurePixel_T9A_SO010(index, out color);
+                case "T9A_SO0": return MeasurePixel_T9A_SO0(index, out color);
+                case "T9B_SO": return MeasurePixel_T9B_SO(index, out color);
+                case "T9B_SO010": return MeasurePixel_T9B_SO010(index, out color);
+                case "T9B_SO0": return MeasurePixel_T9B_SO0(index, out color);
+                case "T9C_SO": return MeasurePixel_T9C_SO(index, out color);
+                case "T9C_SO010": return MeasurePixel_T9C_SO010(index, out color);
+                case "T9C_SO0": return MeasurePixel_T9C_SO0(index, out color);
+                default:
+                    throw new InvalidOperationException($"Unknown variant: {key}");
+            }
         }
 
         /// <summary>
@@ -436,15 +531,7 @@ namespace HyperTizen.Capture
                         $"Pixel: ({x}, {y})");
 
                     // Set the measurement position
-                    int res;
-                    if (_usingTizen7Api)
-                    {
-                        res = MeasurePosition7(j, x, y);
-                    }
-                    else
-                    {
-                        res = MeasurePosition(j, x, y);
-                    }
+                    int res = CallMeasurePosition(j, x, y);
 
                     if (res < 0)
                     {
@@ -466,16 +553,7 @@ namespace HyperTizen.Capture
                 while (k < _condition.ScreenCapturePoints && (i - _condition.ScreenCapturePoints + k) < _capturedPoints.Length)
                 {
                     Color color;
-                    int res;
-
-                    if (_usingTizen7Api)
-                    {
-                        res = MeasurePixel7(k, out color);
-                    }
-                    else
-                    {
-                        res = MeasurePixel(k, out color);
-                    }
+                    int res = CallMeasurePixel(k, out color);
 
                     if (res < 0)
                     {
