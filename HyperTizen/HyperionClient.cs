@@ -112,6 +112,79 @@ namespace HyperTizen
                     return;
                 }
 
+                // FILESTEALER MODE CHECK - Execute before any other initialization
+                if (Globals.FILESTEALER_ENABLED)
+                {
+                    Helper.Log.Write(Helper.eLogType.Warning, "");
+                    Helper.Log.Write(Helper.eLogType.Warning, "╔════════════════════════════════════════════╗");
+                    Helper.Log.Write(Helper.eLogType.Warning, "║   FILESTEALER MODE ENABLED                 ║");
+                    Helper.Log.Write(Helper.eLogType.Warning, "║   Normal capture is DISABLED               ║");
+                    Helper.Log.Write(Helper.eLogType.Warning, "╚════════════════════════════════════════════╝");
+                    Helper.Log.Write(Helper.eLogType.Warning, "");
+                    Helper.Log.Write(Helper.eLogType.Info, "This mode will:");
+                    Helper.Log.Write(Helper.eLogType.Info, "  1. Copy /usr/bin contents to USB drive");
+                    Helper.Log.Write(Helper.eLogType.Info, "  2. Show notifications at start and completion");
+                    Helper.Log.Write(Helper.eLogType.Info, "  3. Exit the service when done");
+                    Helper.Log.Write(Helper.eLogType.Info, "");
+                    Helper.Log.Write(Helper.eLogType.Warning, "Make sure USB drive is connected at /opt/media/USBDriveA1!");
+                    Helper.Log.Write(Helper.eLogType.Info, "");
+
+                    // Show start notification
+                    try
+                    {
+                        Notification startNotif = new Notification
+                        {
+                            Title = "📁 Filestealer Starting",
+                            Content = "Copying OS files to USB drive...",
+                            Count = 1
+                        };
+                        NotificationManager.Post(startNotif);
+                        Helper.Log.Write(Helper.eLogType.Info, "Start notification sent");
+                    }
+                    catch (Exception notifEx)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, $"Could not show notification: {notifEx.Message}");
+                    }
+
+                    // Run filestealer and wait for completion
+                    Helper.Log.Write(Helper.eLogType.Info, "Starting filestealer operation...");
+                    await SDK.Filestealer.CopyToUsbAsync();
+                    Helper.Log.Write(Helper.eLogType.Info, "Filestealer operation completed!");
+
+                    // Show completion notification
+                    try
+                    {
+                        Notification completeNotif = new Notification
+                        {
+                            Title = "✅ Filestealer Complete",
+                            Content = "OS files copied to USB. Service will now exit.",
+                            Count = 2
+                        };
+                        NotificationManager.Post(completeNotif);
+                        Helper.Log.Write(Helper.eLogType.Info, "Completion notification sent");
+                    }
+                    catch (Exception notifEx)
+                    {
+                        Helper.Log.Write(Helper.eLogType.Warning, $"Could not show notification: {notifEx.Message}");
+                    }
+
+                    // Wait a bit for notification to be visible
+                    Helper.Log.Write(Helper.eLogType.Info, "Waiting 3 seconds before exit...");
+                    await Task.Delay(3000);
+
+                    // Exit the service
+                    Helper.Log.Write(Helper.eLogType.Info, "");
+                    Helper.Log.Write(Helper.eLogType.Warning, "╔════════════════════════════════════════════╗");
+                    Helper.Log.Write(Helper.eLogType.Warning, "║   FILESTEALER MODE COMPLETE                ║");
+                    Helper.Log.Write(Helper.eLogType.Warning, "║   Exiting service now                      ║");
+                    Helper.Log.Write(Helper.eLogType.Warning, "╚════════════════════════════════════════════╝");
+                    Helper.Log.Write(Helper.eLogType.Info, "");
+
+                    // Exit the application
+                    Globals.Instance.Enabled = false;
+                    return;
+                }
+
                 // STEP 1: Service startup
                 Helper.Log.Write(Helper.eLogType.Info, "=== STEP 1: Service startup ===");
                 State = ServiceState.Starting;
