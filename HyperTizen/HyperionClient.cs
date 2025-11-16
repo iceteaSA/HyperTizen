@@ -112,7 +112,20 @@ namespace HyperTizen
                     return;
                 }
 
-                // FILESTEALER MODE CHECK - Execute before any other initialization
+                // STEP 1: Early initialization for logging
+                Helper.Log.Write(Helper.eLogType.Info, "=== STEP 1: Service startup ===");
+                State = ServiceState.Starting;
+                _isRunning = true;
+                _startTime = DateTime.Now;
+
+                // STEP 2: Initialize WebSocket logging/control FIRST
+                // This ensures logs are available even in filestealer mode
+                Helper.Log.Write(Helper.eLogType.Info, "=== STEP 2: WebSocket + Config initialization ===");
+                Globals.Instance.SetConfig();
+                Helper.Log.Write(Helper.eLogType.Info, "WebSocket server should be running on port 45678");
+                Helper.Log.Write(Helper.eLogType.Info, $"Connect to http://<TV_IP>:45678 to view logs");
+
+                // FILESTEALER MODE CHECK - Execute after logging is initialized
                 if (Globals.FILESTEALER_ENABLED)
                 {
                     Helper.Log.Write(Helper.eLogType.Warning, "");
@@ -127,6 +140,8 @@ namespace HyperTizen
                     Helper.Log.Write(Helper.eLogType.Info, "  3. Exit the service when done");
                     Helper.Log.Write(Helper.eLogType.Info, "");
                     Helper.Log.Write(Helper.eLogType.Warning, "Make sure USB drive is connected at /opt/media/USBDriveA1!");
+                    Helper.Log.Write(Helper.eLogType.Info, "");
+                    Helper.Log.Write(Helper.eLogType.Info, "📡 WebSocket logs are available at http://<TV_IP>:45678");
                     Helper.Log.Write(Helper.eLogType.Info, "");
 
                     // Show start notification
@@ -168,9 +183,11 @@ namespace HyperTizen
                         Helper.Log.Write(Helper.eLogType.Warning, $"Could not show notification: {notifEx.Message}");
                     }
 
-                    // Wait a bit for notification to be visible
-                    Helper.Log.Write(Helper.eLogType.Info, "Waiting 3 seconds before exit...");
-                    await Task.Delay(3000);
+                    // Wait longer for user to view logs
+                    Helper.Log.Write(Helper.eLogType.Info, "");
+                    Helper.Log.Write(Helper.eLogType.Info, "Waiting 10 seconds before exit...");
+                    Helper.Log.Write(Helper.eLogType.Info, "This gives you time to review the logs via WebSocket");
+                    await Task.Delay(10000);
 
                     // Exit the service
                     Helper.Log.Write(Helper.eLogType.Info, "");
@@ -185,11 +202,7 @@ namespace HyperTizen
                     return;
                 }
 
-                // STEP 1: Service startup
-                Helper.Log.Write(Helper.eLogType.Info, "=== STEP 1: Service startup ===");
-                State = ServiceState.Starting;
-                _isRunning = true;
-                _startTime = DateTime.Now;
+                // Continue with normal startup flow
                 _framesCaptured = 0;
                 _errorCount = 0;
                 _fpsHistory.Clear();
@@ -197,12 +210,10 @@ namespace HyperTizen
                 // Create new cancellation token source
                 _cancellationTokenSource = new CancellationTokenSource();
 
-                Helper.Log.Write(Helper.eLogType.Info, "HyperionClient starting...");
+                Helper.Log.Write(Helper.eLogType.Info, "HyperionClient starting normal capture mode...");
 
-                // STEP 2: Logging/control WebSocket startup
-                // STEP 3: SSDP scans
-                Helper.Log.Write(Helper.eLogType.Info, "=== STEP 2 & 3: WebSocket + SSDP scans ===");
-                Globals.Instance.SetConfig();
+                // STEP 3: SSDP scans (already done in SetConfig above)
+                Helper.Log.Write(Helper.eLogType.Info, "=== STEP 3: SSDP scan complete ===");
 
                 // Log the discovered configuration
                 Helper.Log.Write(Helper.eLogType.Info,
