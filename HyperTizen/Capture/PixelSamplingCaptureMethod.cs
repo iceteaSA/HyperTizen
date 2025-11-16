@@ -49,24 +49,6 @@ namespace HyperTizen.Capture
 
         #region P/Invoke Declarations
 
-        // dlopen/dlsym for dynamic symbol enumeration
-        // Using "libdl.so.2" which is standard on Linux systems
-        // Falls back to trying libdl.so.2 or libc if not found
-        private const int RTLD_NOW = 2;
-        private const int RTLD_LAZY = 1;
-
-        [DllImport("libdl.so.2", CallingConvention = CallingConvention.Cdecl)]
-        private static extern IntPtr dlopen(string filename, int flags);
-
-        [DllImport("libdl.so.2", CallingConvention = CallingConvention.Cdecl)]
-        private static extern IntPtr dlsym(IntPtr handle, string symbol);
-
-        [DllImport("libdl.so.2", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int dlclose(IntPtr handle);
-
-        [DllImport("libdl.so.2", CallingConvention = CallingConvention.Cdecl)]
-        private static extern IntPtr dlerror();
-
         // Tizen 6 API (cs_ve_* prefix)
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "cs_ve_get_rgb_measure_condition")]
@@ -381,10 +363,8 @@ namespace HyperTizen.Capture
                 {
                     Helper.Log.Write(Helper.eLogType.Error,
                         $"PixelSampling: ALL API variants failed - last attempt (variant C) returned error code {res}");
-
-                    // List available entry points for diagnostics
-                    LogAvailableEntryPoints();
-
+                    Helper.Log.Write(Helper.eLogType.Error,
+                        "PixelSampling: libvideoenhance.so may not support RGB pixel sampling on this Tizen version");
                     return false;
                 }
             }
@@ -394,20 +374,12 @@ namespace HyperTizen.Capture
                     $"PixelSampling: Tizen 9+ API variant C entry point not found: {ex.Message}");
                 Helper.Log.Write(Helper.eLogType.Error,
                     "PixelSampling: ALL API variants failed - library incompatible with this Tizen version");
-
-                // List available entry points for diagnostics
-                LogAvailableEntryPoints();
-
                 return false;
             }
             catch (Exception ex)
             {
                 Helper.Log.Write(Helper.eLogType.Error,
                     $"PixelSampling: Tizen 9+ API variant C exception: {ex.GetType().Name}: {ex.Message}");
-
-                // List available entry points for diagnostics
-                LogAvailableEntryPoints();
-
                 return false;
             }
         }
@@ -421,166 +393,6 @@ namespace HyperTizen.Capture
                 $"PixelSampling: Condition - Width: {_condition.Width}, Height: {_condition.Height}, " +
                 $"Points: {_condition.ScreenCapturePoints}, PixelDensity: {_condition.PixelDensityX}x{_condition.PixelDensityY}, " +
                 $"Sleep: {_condition.SleepMS}ms");
-        }
-
-        /// <summary>
-        /// Log available entry points in libvideoenhance.so for diagnostics
-        /// Uses dlopen/dlsym for programmatic symbol testing
-        /// </summary>
-        private void LogAvailableEntryPoints()
-        {
-            Helper.Log.Write(Helper.eLogType.Info,
-                "PixelSampling: ===== LIBRARY SYMBOL ENUMERATION DIAGNOSTICS =====");
-
-            // Use dlopen/dlsym to test specific entry points
-            TryDlopenSymbolTest();
-
-            Helper.Log.Write(Helper.eLogType.Info,
-                "PixelSampling: ===== END DIAGNOSTICS =====");
-
-            Helper.Log.Write(Helper.eLogType.Info,
-                "PixelSampling: ACTIONABLE NEXT STEPS:");
-            Helper.Log.Write(Helper.eLogType.Info,
-                "  1. Check diagnostics output above for available symbols");
-            Helper.Log.Write(Helper.eLogType.Info,
-                "  2. If symbols found, add P/Invoke declarations with correct entry point names");
-            Helper.Log.Write(Helper.eLogType.Info,
-                "  3. If no symbols found, libvideoenhance.so may not support RGB pixel sampling on this Tizen version");
-            Helper.Log.Write(Helper.eLogType.Info,
-                "  4. Consider alternative capture methods (TBM/DRM capture for Tizen 8+)");
-        }
-
-        /// <summary>
-        /// Try to test specific entry points using dlopen/dlsym
-        /// Tests multiple library paths including Tizen 8+ .so.0.1.0 variants
-        /// </summary>
-        private bool TryDlopenSymbolTest()
-        {
-            try
-            {
-                Helper.Log.Write(Helper.eLogType.Info,
-                    "PixelSampling: Testing entry points with dlopen/dlsym...");
-
-                // Test multiple library paths (Tizen 8+ may use versioned .so.0.1.0)
-                string[] libraryPaths = new string[]
-                {
-                    "/usr/lib/libvideoenhance.so",
-                    "/usr/lib/libvideoenhance.so.0.1.0",
-                    "/usr/lib/libvideoenhance.so.0",
-                    "/lib/libvideoenhance.so",
-                    "/lib/libvideoenhance.so.0.1.0",
-                    "/lib/libvideoenhance.so.0"
-                };
-
-                IntPtr handle = IntPtr.Zero;
-                string successPath = null;
-
-                // Try to open library with different paths
-                foreach (var libPath in libraryPaths)
-                {
-                    handle = dlopen(libPath, RTLD_NOW);
-                    if (handle != IntPtr.Zero)
-                    {
-                        successPath = libPath;
-                        Helper.Log.Write(Helper.eLogType.Info,
-                            $"PixelSampling: ✓ Opened library: {libPath}");
-                        break;
-                    }
-                }
-
-                if (handle == IntPtr.Zero)
-                {
-                    IntPtr errorPtr = dlerror();
-                    string error = errorPtr != IntPtr.Zero ? Marshal.PtrToStringAnsi(errorPtr) : "Unknown error";
-                    Helper.Log.Write(Helper.eLogType.Error,
-                        $"PixelSampling: dlopen failed for all paths: {error}");
-                    return false;
-                }
-
-                // Test known entry point patterns
-                string[] knownSymbols = new string[]
-                {
-                    // Tizen 6/7 variants
-                    "cs_ve_get_rgb_measure_condition",
-                    "cs_ve_set_rgb_measure_position",
-                    "cs_ve_get_rgb_measure_pixel",
-                    "ve_get_rgb_measure_condition",
-                    "ve_set_rgb_measure_position",
-                    "ve_get_rgb_measure_pixel",
-
-                    // Tizen 9+ potential variants
-                    "tizen_ve_get_rgb_measure_condition",
-                    "tizen_ve_set_rgb_measure_position",
-                    "tizen_ve_get_rgb_measure_pixel",
-                    "samsung_ve_get_rgb_measure_condition",
-                    "samsung_ve_set_rgb_measure_position",
-                    "samsung_ve_get_rgb_measure_pixel",
-                    "get_rgb_measure_condition",
-                    "set_rgb_measure_position",
-                    "get_rgb_measure_pixel",
-
-                    // Other potential naming patterns
-                    "ve_rgb_measure_condition_get",
-                    "ve_rgb_measure_position_set",
-                    "ve_rgb_measure_pixel_get",
-                    "videoenhance_get_rgb_condition",
-                    "videoenhance_set_rgb_position",
-                    "videoenhance_get_rgb_pixel",
-
-                    // Completely different naming
-                    "rgb_measure_condition",
-                    "rgb_measure_position",
-                    "rgb_measure_pixel",
-                    "get_condition",
-                    "set_position",
-                    "get_pixel",
-
-                    // Mangled/decorated variants
-                    "_cs_ve_get_rgb_measure_condition",
-                    "_ve_get_rgb_measure_condition",
-                    "RGB_measure_condition",
-                    "RGBMeasureCondition"
-                };
-
-                var foundSymbols = new List<string>();
-
-                foreach (var symbol in knownSymbols)
-                {
-                    IntPtr sym = dlsym(handle, symbol);
-                    if (sym != IntPtr.Zero)
-                    {
-                        foundSymbols.Add(symbol);
-                    }
-                }
-
-                dlclose(handle);
-
-                // Log results
-                if (foundSymbols.Count > 0)
-                {
-                    Helper.Log.Write(Helper.eLogType.Info,
-                        $"PixelSampling: ✓ Found {foundSymbols.Count} entry point(s) in {successPath}:");
-                    foreach (var symbol in foundSymbols)
-                    {
-                        Helper.Log.Write(Helper.eLogType.Info, $"    ✓ {symbol}");
-                    }
-                }
-                else
-                {
-                    Helper.Log.Write(Helper.eLogType.Warning,
-                        $"PixelSampling: ✗ NO matching entry points found in {successPath}");
-                    Helper.Log.Write(Helper.eLogType.Info,
-                        $"PixelSampling: Tested {knownSymbols.Length} symbol patterns but none matched");
-                }
-
-                return foundSymbols.Count > 0;
-            }
-            catch (Exception ex)
-            {
-                Helper.Log.Write(Helper.eLogType.Warning,
-                    $"PixelSampling: dlopen/dlsym test failed: {ex.Message}");
-                return false;
-            }
         }
 
         /// <summary>
