@@ -198,6 +198,12 @@ namespace HyperTizen.Capture
             int res = -1;
             try
             {
+                // TODO: DIAGNOSTIC - Remove struct size logging after verification
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"PixelSampling: Condition struct size: {Marshal.SizeOf<Condition>()} bytes");
+                Helper.Log.Write(Helper.eLogType.Debug,
+                    $"PixelSampling: Color struct size: {Marshal.SizeOf<Color>()} bytes");
+
                 if (!IsTizen7OrHigher)
                 {
                     Helper.Log.Write(Helper.eLogType.Debug, "PixelSampling: Calling MeasureCondition (Tizen 6 API)");
@@ -347,9 +353,22 @@ namespace HyperTizen.Capture
                             color.B = Math.Max(0, Math.Min(1023, color.B));
                         }
 
+                        // TODO: DIAGNOSTIC - Remove color scaling comparison after verification
+                        // Log both clamping and scaling approaches to determine which is needed
+                        byte clampedR = (byte)Math.Min(color.R, 255);
+                        byte clampedG = (byte)Math.Min(color.G, 255);
+                        byte clampedB = (byte)Math.Min(color.B, 255);
+                        byte scaledR = (byte)Math.Min(255, color.R * 255 / 1023);
+                        byte scaledG = (byte)Math.Min(255, color.G * 255 / 1023);
+                        byte scaledB = (byte)Math.Min(255, color.B * 255 / 1023);
+
                         Helper.Log.Write(Helper.eLogType.Debug,
                             $"PixelSampling: Point {i - _condition.ScreenCapturePoints + k} color (10-bit): " +
                             $"R={color.R}, G={color.G}, B={color.B}");
+                        Helper.Log.Write(Helper.eLogType.Debug,
+                            $"  → Clamped (8-bit): R={clampedR}, G={clampedG}, B={clampedB}");
+                        Helper.Log.Write(Helper.eLogType.Debug,
+                            $"  → Scaled  (8-bit): R={scaledR}, G={scaledG}, B={scaledB}");
                     }
 
                     colorData[i - _condition.ScreenCapturePoints + k] = color;
@@ -361,8 +380,9 @@ namespace HyperTizen.Capture
         }
 
         /// <summary>
-        /// Convert sampled pixel colors to NV12 format
+        /// Convert sampled pixel colors to NV12 format using BT.2020 color space
         /// Creates a virtual 64x48 image with sampled colors mapped to screen edges
+        /// Uses BT.2020 coefficients for HDR10+ compatibility
         /// </summary>
         private (byte[] yData, byte[] uvData) ConvertColorsToNV12(Color[] colors)
         {
@@ -450,7 +470,7 @@ namespace HyperTizen.Capture
                 }
             }
 
-            // Convert RGB to NV12
+            // Convert RGB to NV12 using BT.2020 color space (HDR10+ compatible)
             // Y plane
             for (int y = 0; y < height; y++)
             {
@@ -461,8 +481,8 @@ namespace HyperTizen.Capture
                     byte g = rgbImage[rgbIdx + 1];
                     byte b = rgbImage[rgbIdx + 2];
 
-                    // Y = 0.299R + 0.587G + 0.114B
-                    int yVal = (int)(0.299 * r + 0.587 * g + 0.114 * b);
+                    // BT.2020 Y = 0.2627R + 0.678G + 0.0593B
+                    int yVal = (int)(0.2627 * r + 0.678 * g + 0.0593 * b);
                     yData[y * width + x] = (byte)Math.Max(0, Math.Min(255, yVal));
                 }
             }
@@ -478,10 +498,10 @@ namespace HyperTizen.Capture
                     byte g = rgbImage[rgbIdx + 1];
                     byte b = rgbImage[rgbIdx + 2];
 
-                    // U = -0.169R - 0.331G + 0.500B + 128
-                    // V = 0.500R - 0.419G - 0.081B + 128
-                    int uVal = (int)(-0.169 * r - 0.331 * g + 0.500 * b + 128);
-                    int vVal = (int)(0.500 * r - 0.419 * g - 0.081 * b + 128);
+                    // BT.2020 U = -0.1396R - 0.36037G + 0.5B + 128
+                    // BT.2020 V = 0.5R - 0.4598G - 0.0402B + 128
+                    int uVal = (int)(-0.1396 * r - 0.36037 * g + 0.5 * b + 128);
+                    int vVal = (int)(0.5 * r - 0.4598 * g - 0.0402 * b + 128);
 
                     int uvIdx = (y / 2) * width + x;
                     uvData[uvIdx + 0] = (byte)Math.Max(0, Math.Min(255, uVal)); // U
@@ -495,6 +515,7 @@ namespace HyperTizen.Capture
         /// <summary>
         /// Clamp 10-bit color value (0-1023) to 8-bit (0-255)
         /// Note: This uses simple clamping, not scaling. Based on original implementation.
+        /// TODO: DIAGNOSTIC - Review log output to determine if scaling (value * 255 / 1023) is needed instead
         /// </summary>
         private byte ClampTo8Bit(int value)
         {
