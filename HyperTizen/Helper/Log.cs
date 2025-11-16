@@ -54,44 +54,6 @@ namespace HyperTizen.Helper
             return $"WebSocket: {(running ? "RUNNING" : "STOPPED")} on port {port}, {clients} client(s) connected";
         }
 
-        public static void BroadcastSearchProgress(int current, int total, string logPath)
-        {
-            string message = $"[Search Progress] {current}/{total} complete";
-            Write(eLogType.Debug, message);
-        }
-
-        public static void BroadcastSearchComplete(string logPath)
-        {
-            Write(eLogType.Info, "Library search complete! Streaming results...");
-
-            // Stream the file to all connected WebSocket clients
-            try
-            {
-                if (System.IO.File.Exists(logPath))
-                {
-                    string fileContents = System.IO.File.ReadAllText(logPath);
-                    string[] lines = fileContents.Split('\n');
-
-                    foreach (string line in lines)
-                    {
-                        if (!string.IsNullOrWhiteSpace(line))
-                        {
-                            string timestamp = DateTime.Now.ToString("HH:mm:ss");
-                            string logMessage = $"[{timestamp}] [SearchLog] {line}";
-                            webSocketServer?.BroadcastLog(logMessage);
-                            System.Threading.Thread.Sleep(10); // Small delay to avoid overwhelming
-                        }
-                    }
-
-                    Write(eLogType.Info, $"Search results streamed ({lines.Length} lines)");
-                }
-            }
-            catch (Exception ex)
-            {
-                Write(eLogType.Error, $"Failed to stream search results: {ex.Message}");
-            }
-        }
-
         public static List<string> GetRecentLogs()
         {
             lock (logLock)
@@ -131,14 +93,11 @@ namespace HyperTizen.Helper
             // Always write to Debug output
             Debug.WriteLine(logMessage);
 
-            // Show notification ONLY for important short messages (not search results!)
-            // Skip notifications for SearchLog and progress messages
+            // Show notification ONLY for important short messages
             if (Globals.Instance.ShowNotifications &&
                 (type == eLogType.Error || type == eLogType.Warning || type == eLogType.Info) &&
                 message.Length < 100 &&
-                !message.Contains("Search") &&
-                !message.Contains("Command:") &&
-                !message.Contains("[SearchLog]"))
+                !message.Contains("Command:"))
             {
                 try
                 {

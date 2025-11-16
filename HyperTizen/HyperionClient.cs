@@ -316,19 +316,20 @@ namespace HyperTizen
                     }
                     Helper.Log.Write(Helper.eLogType.Info, "");
 
-                    // SCAN FOR ALTERNATIVES - Look for workarounds and alternative libraries
-                    if (SDK.SystemInfo.TizenVersionMajor >= 8)
-                    {
-                        Helper.Log.Write(Helper.eLogType.Info, "Scanning for alternative capture methods...");
-                        try
-                        {
-                            SDK.LibraryScanner.ScanForAlternatives();
-                        }
-                        catch (Exception scanEx)
-                        {
-                            Helper.Log.Write(Helper.eLogType.Error, $"Library scan exception: {scanEx.Message}");
-                        }
-                    }
+                    // SCAN FOR ALTERNATIVES - Disabled for clean starter project
+                    // Uncomment to scan for alternative capture libraries during diagnostics
+                    // if (SDK.SystemInfo.TizenVersionMajor >= 8)
+                    // {
+                    //     Helper.Log.Write(Helper.eLogType.Info, "Scanning for alternative capture methods...");
+                    //     try
+                    //     {
+                    //         SDK.LibraryScanner.ScanForAlternatives();
+                    //     }
+                    //     catch (Exception scanEx)
+                    //     {
+                    //         Helper.Log.Write(Helper.eLogType.Error, $"Library scan exception: {scanEx.Message}");
+                    //     }
+                    // }
 
                     // Show notification
                     if (Globals.Instance.ShowNotifications)

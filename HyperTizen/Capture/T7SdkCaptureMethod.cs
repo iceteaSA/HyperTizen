@@ -1,14 +1,18 @@
 using System;
 using System.Runtime.InteropServices;
-using HyperTizen.SDK;
 
 namespace HyperTizen.Capture
 {
     /// <summary>
-    /// Tizen 7 SDK capture method using SecVideoCaptureT7
-    /// Wraps the legacy libsec-video-capture.so API
-    /// Medium priority - fast full-frame capture on Tizen 7 and below
-    /// Also works as fallback on some Tizen 8 models
+    /// Tizen 7 SDK capture method using legacy API
+    /// This method uses the older capture API available on Tizen 7.0 and earlier
+    ///
+    /// TODO: Implement Tizen 7 capture logic
+    /// - Probe for libsec-video-capture.so.0 or similar legacy libraries
+    /// - Initialize capture session
+    /// - Call capture function with buffer pointers
+    /// - Handle error codes and edge cases
+    /// Note: This library may not exist on Tizen 8+ systems
     /// </summary>
     public class T7SdkCaptureMethod : ICaptureMethod
     {
@@ -16,51 +20,83 @@ namespace HyperTizen.Capture
         private IntPtr _pImageUV;
         private bool _buffersAllocated = false;
 
-        public string Name => "Tizen 7 SDK (Legacy API)";
+        public string Name => "Tizen 7 SDK (Legacy)";
         public CaptureMethodType Type => CaptureMethodType.T7SDK;
 
+        /// <summary>
+        /// Check if T7 SDK is available on this system
+        /// TODO: Implement library availability check
+        /// </summary>
         public bool IsAvailable()
         {
-            // T7 SDK not available on Tizen 9+ (library removed)
-            if (SDK.SystemInfo.TizenVersionMajor >= 9)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug,
-                    "T7SDK: Not available (Tizen 9+ detected - libsec-video-capture.so.0 removed from OS)");
-                return false;
-            }
+            Helper.Log.Write(Helper.eLogType.Debug, "T7SDK: Checking availability...");
 
-            // Check if T7 library exists
-            if (!System.IO.File.Exists("/usr/lib/libsec-video-capture.so.0"))
-            {
-                Helper.Log.Write(Helper.eLogType.Debug, "T7SDK: Not available (library file not found)");
-                return false;
-            }
+            // TODO: Check if legacy library exists
+            // Note: T7 library typically doesn't exist on Tizen 9+ systems
+            // Example:
+            // if (!System.IO.File.Exists("/usr/lib/libsec-video-capture.so.0"))
+            // {
+            //     Helper.Log.Write(Helper.eLogType.Debug, "T7SDK: Library not found");
+            //     return false;
+            // }
 
-            return true;
+            Helper.Log.Write(Helper.eLogType.Warning, "T7SDK: Not implemented");
+            return false;
         }
 
+        /// <summary>
+        /// Test T7 SDK by attempting a capture
+        /// TODO: Implement test capture logic
+        /// </summary>
         public bool Test()
         {
             if (!IsAvailable())
                 return false;
 
-            // T7 SDK methods are disabled on Tizen 8+ (DllImports commented out for safety)
-            // This code path should never execute due to IsAvailable() check above
-            // But we need it to compile, so return false immediately
-            Helper.Log.Write(Helper.eLogType.Error,
-                "T7SDK Test: Cannot test - T7 API methods are disabled (Tizen 8+ only supports T8 API)");
-            return false;
+            try
+            {
+                Helper.Log.Write(Helper.eLogType.Info, "T7SDK: Testing capture...");
+
+                // TODO: Initialize SDK if needed
+                // TODO: Perform test capture
+                // TODO: Validate capture result
+
+                Helper.Log.Write(Helper.eLogType.Warning, "T7SDK Test: Not implemented");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, $"T7SDK Test exception: {ex.Message}");
+                return false;
+            }
         }
 
+        /// <summary>
+        /// Capture screen using T7 SDK
+        /// TODO: Implement actual capture logic
+        /// </summary>
         public CaptureResult Capture(int width, int height)
         {
-            // T7 SDK methods are disabled on Tizen 8+ (DllImports commented out for safety)
-            // This should never be called because IsAvailable() returns false on Tizen 8+
-            // But we need it to compile, so return failure immediately
-            return CaptureResult.CreateFailure(
-                "T7 SDK is disabled - T7 API methods not available on Tizen 8+");
+            try
+            {
+                // TODO: Allocate buffers if needed
+                //       Y buffer size: width * height
+                //       UV buffer size: (width * height) / 2
+                // TODO: Call legacy capture function
+                // TODO: Copy data from unmanaged buffers to managed arrays
+                // TODO: Return success result with captured data
+
+                return CaptureResult.CreateFailure("T7SDK not implemented");
+            }
+            catch (Exception ex)
+            {
+                return CaptureResult.CreateFailure($"T7SDK exception: {ex.Message}");
+            }
         }
 
+        /// <summary>
+        /// Clean up allocated buffers and resources
+        /// </summary>
         public void Cleanup()
         {
             if (_pImageY != IntPtr.Zero)
@@ -76,6 +112,7 @@ namespace HyperTizen.Capture
             }
 
             _buffersAllocated = false;
+            Helper.Log.Write(Helper.eLogType.Debug, "T7SDK: Cleaned up");
         }
     }
 }

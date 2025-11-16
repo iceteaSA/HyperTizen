@@ -12,7 +12,7 @@ namespace HyperTizen
         // FILESTEALER MODE: When enabled, the app will copy Tizen OS files to USB and exit
         // This is for research purposes on Tizen 9+ to understand OS structure
         // WARNING: Set to false for normal capture operation!
-        public const bool FILESTEALER_ENABLED = true;
+        public const bool FILESTEALER_ENABLED = false;
 
         private static readonly Globals instance = new Globals();
 
@@ -120,8 +120,8 @@ namespace HyperTizen
             Enabled = bool.TryParse(enabledPref, out bool enabledResult) && enabledResult;
             Helper.Log.Write(Helper.eLogType.Info, $"Loaded enabled setting from preferences: {Enabled}");
 
-            // Load diagnostic mode setting from preferences, defaulting to TRUE for safer testing
-            string diagnosticPref = Preference.Contains("diagnosticMode") ? Preference.Get<string>("diagnosticMode") : "true";
+            // Load diagnostic mode setting from preferences, defaulting to FALSE for normal operation
+            string diagnosticPref = Preference.Contains("diagnosticMode") ? Preference.Get<string>("diagnosticMode") : "false";
             DiagnosticMode = bool.TryParse(diagnosticPref, out bool diagnosticResult) && diagnosticResult;
             Helper.Log.Write(Helper.eLogType.Info, $"Loaded diagnosticMode setting from preferences: {DiagnosticMode}");
         }
@@ -132,7 +132,7 @@ namespace HyperTizen
             string enabledPref = Preference.Contains("enabled") ? Preference.Get<string>("enabled") : "true";
             Enabled = bool.TryParse(enabledPref, out bool enabledResult) && enabledResult;
 
-            string diagnosticPref = Preference.Contains("diagnosticMode") ? Preference.Get<string>("diagnosticMode") : "true";
+            string diagnosticPref = Preference.Contains("diagnosticMode") ? Preference.Get<string>("diagnosticMode") : "false";
             DiagnosticMode = bool.TryParse(diagnosticPref, out bool diagnosticResult) && diagnosticResult;
 
             Helper.Log.Write(Helper.eLogType.Info, $"Preferences loaded early - DiagnosticMode: {DiagnosticMode}, Enabled: {Enabled}");

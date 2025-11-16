@@ -1,13 +1,18 @@
 using System;
 using System.Runtime.InteropServices;
-using HyperTizen.SDK;
 
 namespace HyperTizen.Capture
 {
     /// <summary>
-    /// Tizen 8 SDK capture method using SecVideoCaptureT8
-    /// Wraps the new VTable API with Lock/getVideoMainYUV/Unlock
-    /// Highest priority - fast full-frame capture on Tizen 8+
+    /// Tizen 8+ SDK capture method using VTable-based API
+    /// This method uses vtable function calls for video capture on newer Tizen versions
+    ///
+    /// TODO: Implement Tizen 8+ capture logic
+    /// - Probe for libvideo-capture.so or similar libraries
+    /// - Get instance pointer using getInstance or similar factory method
+    /// - Call Lock/Unlock methods around capture operations
+    /// - Use appropriate capture function (e.g., getVideoMainYUV or equivalent)
+    /// - Handle error codes (-95 = not supported, -4 = DRM protected, etc.)
     /// </summary>
     public class T8SdkCaptureMethod : ICaptureMethod
     {
@@ -15,27 +20,34 @@ namespace HyperTizen.Capture
         private IntPtr _pImageY;
         private IntPtr _pImageUV;
 
-        public string Name => "Tizen 8 SDK (VTable API)";
+        public string Name => "Tizen 8+ SDK";
         public CaptureMethodType Type => CaptureMethodType.T8SDK;
 
+        /// <summary>
+        /// Check if T8 SDK is available on this system
+        /// TODO: Implement library availability check
+        /// </summary>
         public bool IsAvailable()
         {
-            // Check if Tizen 8+ and library exists
-            if (SystemInfo.TizenVersionMajor < 8)
-            {
-                Helper.Log.Write(Helper.eLogType.Debug, "T8SDK: Not available (Tizen < 8)");
-                return false;
-            }
+            Helper.Log.Write(Helper.eLogType.Debug, "T8SDK: Checking availability...");
 
-            if (!System.IO.File.Exists("/usr/lib/libvideo-capture.so.0.1.0"))
-            {
-                Helper.Log.Write(Helper.eLogType.Debug, "T8SDK: Not available (library not found)");
-                return false;
-            }
+            // TODO: Check Tizen version (should be 8+)
+            // TODO: Check if capture library exists (e.g., /usr/lib/libvideo-capture.so.*)
+            // Example:
+            // if (TizenVersionMajor < 8)
+            // {
+            //     Helper.Log.Write(Helper.eLogType.Debug, "T8SDK: Not available (Tizen < 8)");
+            //     return false;
+            // }
 
-            return true;
+            Helper.Log.Write(Helper.eLogType.Warning, "T8SDK: Not implemented");
+            return false;
         }
 
+        /// <summary>
+        /// Test T8 SDK by attempting a capture
+        /// TODO: Implement test capture logic
+        /// </summary>
         public bool Test()
         {
             if (!IsAvailable())
@@ -43,75 +55,55 @@ namespace HyperTizen.Capture
 
             try
             {
-                // Initialize if not already done
-                if (!_isInitialized)
-                {
-                    SecVideoCaptureT8.Init();
-                    _isInitialized = true;
-                }
+                Helper.Log.Write(Helper.eLogType.Info, "T8SDK: Testing capture...");
 
-                // Run test capture
-                return SecVideoCaptureT8.TestCapture();
+                // TODO: Initialize SDK if needed
+                // TODO: Perform test capture
+                // TODO: Check for error codes:
+                //       0 or 4 = success
+                //       -95 = operation not supported (firmware blocked)
+                //       -4 = DRM protected content
+                //       -99 = not initialized
+
+                Helper.Log.Write(Helper.eLogType.Warning, "T8SDK Test: Not implemented");
+                return false;
             }
             catch (Exception ex)
             {
-                Helper.Log.Write(Helper.eLogType.Error, $"T8SDK Test failed: {ex.Message}");
+                Helper.Log.Write(Helper.eLogType.Error, $"T8SDK Test exception: {ex.Message}");
                 return false;
             }
         }
 
+        /// <summary>
+        /// Capture screen using T8 SDK
+        /// TODO: Implement actual capture logic
+        /// </summary>
         public CaptureResult Capture(int width, int height)
         {
             try
             {
-                // Initialize on first capture
-                if (!_isInitialized)
-                {
-                    SecVideoCaptureT8.Init();
-                    _isInitialized = true;
+                // TODO: Initialize on first capture if needed
+                // TODO: Allocate buffers for Y and UV planes (NV12 format)
+                //       Y buffer size: width * height
+                //       UV buffer size: (width * height) / 2
+                // TODO: Call Lock method
+                // TODO: Call capture method with buffer pointers
+                // TODO: Call Unlock method
+                // TODO: Copy data from unmanaged buffers to managed arrays
+                // TODO: Return success result with captured data
 
-                    // Allocate buffers
-                    int ySize = width * height;
-                    int uvSize = (width * height) / 2;
-                    _pImageY = Marshal.AllocHGlobal(ySize);
-                    _pImageUV = Marshal.AllocHGlobal(uvSize);
-                }
-
-                // Prepare Info_t structure
-                int ySize2 = width * height;
-                int uvSize2 = (width * height) / 2;
-
-                SecVideoCapture.Info_t info = new SecVideoCapture.Info_t
-                {
-                    iGivenBufferSize1 = ySize2,
-                    iGivenBufferSize2 = uvSize2,
-                    pImageY = _pImageY,
-                    pImageUV = _pImageUV
-                };
-
-                // Call T8 SDK capture
-                int result = SecVideoCaptureT8.CaptureScreen(width, height, ref info);
-
-                // Check result
-                if (result < 0)
-                {
-                    return CaptureResult.CreateFailure($"T8 SDK returned error code: {result}");
-                }
-
-                // Copy data from unmanaged buffers
-                byte[] yData = new byte[ySize2];
-                byte[] uvData = new byte[uvSize2];
-                Marshal.Copy(info.pImageY, yData, 0, ySize2);
-                Marshal.Copy(info.pImageUV, uvData, 0, uvSize2);
-
-                return CaptureResult.CreateSuccess(yData, uvData, info.iWidth, info.iHeight);
+                return CaptureResult.CreateFailure("T8SDK not implemented");
             }
             catch (Exception ex)
             {
-                return CaptureResult.CreateFailure($"T8 SDK exception: {ex.Message}");
+                return CaptureResult.CreateFailure($"T8SDK exception: {ex.Message}");
             }
         }
 
+        /// <summary>
+        /// Clean up allocated buffers and resources
+        /// </summary>
         public void Cleanup()
         {
             if (_pImageY != IntPtr.Zero)
@@ -127,6 +119,7 @@ namespace HyperTizen.Capture
             }
 
             _isInitialized = false;
+            Helper.Log.Write(Helper.eLogType.Debug, "T8SDK: Cleaned up");
         }
     }
 }

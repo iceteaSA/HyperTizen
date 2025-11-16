@@ -267,6 +267,17 @@
         </label>
         <button onclick="connect()">Connect</button>
         <button onclick="stopReconnect()" class="clear">Stop Auto-Reconnect</button>
+        <label style="margin-left: 20px;">
+            Log Level:
+            <select id="logLevelFilter" onchange="filterLogs()" style="background: #3c3c3c; border: 1px solid #3e3e42; color: #cccccc; padding: 4px 8px; border-radius: 3px; font-size: 12px; cursor: pointer;">
+                <option value="All">All</option>
+                <option value="Debug">Debug+</option>
+                <option value="Info">Info+</option>
+                <option value="Warning">Warning+</option>
+                <option value="Error">Error</option>
+                <option value="Performance">Performance</option>
+            </select>
+        </label>
     </div>
 
     <div class="logs-container" id="logsContainer"></div>
@@ -443,6 +454,7 @@
             const container = document.getElementById('logsContainer');
             const entry = document.createElement('div');
             entry.className = `log-entry ${type}`;
+            entry.setAttribute('data-log-type', type);
 
             const timestampSpan = document.createElement('span');
             timestampSpan.className = 'timestamp';
@@ -463,6 +475,9 @@
 
             logCount++;
             document.getElementById('logCount').textContent = logCount;
+
+            // Apply current filter
+            applyFilterToEntry(entry);
 
             // Auto-scroll if enabled
             if (document.getElementById('autoScroll').checked) {
@@ -517,6 +532,56 @@
             if (reconnectTimer) {
                 clearTimeout(reconnectTimer);
             }
+        });
+
+        // Log level filtering
+        const logLevelHierarchy = {
+            'Debug': 0,
+            'Info': 1,
+            'Warning': 2,
+            'Error': 3,
+            'Performance': 4
+        };
+
+        function filterLogs() {
+            const container = document.getElementById('logsContainer');
+            const entries = container.querySelectorAll('.log-entry');
+            entries.forEach(entry => applyFilterToEntry(entry));
+        }
+
+        function applyFilterToEntry(entry) {
+            const selectedLevel = document.getElementById('logLevelFilter').value;
+            const entryType = entry.getAttribute('data-log-type');
+
+            if (selectedLevel === 'All') {
+                entry.style.display = '';
+                return;
+            }
+
+            // Special case for Performance - only show Performance logs
+            if (selectedLevel === 'Performance') {
+                entry.style.display = entryType === 'Performance' ? '' : 'none';
+                return;
+            }
+
+            // For other levels, show that level and higher priority levels
+            const selectedPriority = logLevelHierarchy[selectedLevel];
+            const entryPriority = logLevelHierarchy[entryType];
+
+            if (entryPriority !== undefined && entryPriority >= selectedPriority) {
+                entry.style.display = '';
+            } else {
+                entry.style.display = 'none';
+            }
+        }
+
+        // Load saved log level filter
+        const savedLogLevel = localStorage.getItem('logLevelFilter') || 'All';
+        document.getElementById('logLevelFilter').value = savedLogLevel;
+
+        // Save log level filter on change
+        document.getElementById('logLevelFilter').addEventListener('change', function() {
+            localStorage.setItem('logLevelFilter', this.value);
         });
     </script>
 </body>
