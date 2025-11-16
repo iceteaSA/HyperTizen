@@ -345,85 +345,85 @@ namespace HyperTizen.Capture
             if (TryVariant(
                 () => MeasureCondition_T6_SO(out _condition),
                 (idx, x, y) => MeasurePosition_T6_SO(idx, x, y),
-                (idx, out Color c) => MeasurePixel_T6_SO(idx, out c),
+                MeasurePixel_T6_SO,
                 "T6", "SO", "cs_ve_*", ".so")) return true;
             if (TryVariant(
                 () => MeasureCondition_T6_SO010(out _condition),
                 (idx, x, y) => MeasurePosition_T6_SO010(idx, x, y),
-                (idx, out Color c) => MeasurePixel_T6_SO010(idx, out c),
+                MeasurePixel_T6_SO010,
                 "T6", "SO010", "cs_ve_*", ".so.0.1.0")) return true;
             if (TryVariant(
                 () => MeasureCondition_T6_SO0(out _condition),
                 (idx, x, y) => MeasurePosition_T6_SO0(idx, x, y),
-                (idx, out Color c) => MeasurePixel_T6_SO0(idx, out c),
+                MeasurePixel_T6_SO0,
                 "T6", "SO0", "cs_ve_*", ".so.0")) return true;
 
             // Test Tizen 7 (ve_*) with all library paths
             if (TryVariant(
                 () => MeasureCondition_T7_SO(out _condition),
                 (idx, x, y) => MeasurePosition_T7_SO(idx, x, y),
-                (idx, out Color c) => MeasurePixel_T7_SO(idx, out c),
+                MeasurePixel_T7_SO,
                 "T7", "SO", "ve_*", ".so")) return true;
             if (TryVariant(
                 () => MeasureCondition_T7_SO010(out _condition),
                 (idx, x, y) => MeasurePosition_T7_SO010(idx, x, y),
-                (idx, out Color c) => MeasurePixel_T7_SO010(idx, out c),
+                MeasurePixel_T7_SO010,
                 "T7", "SO010", "ve_*", ".so.0.1.0")) return true;
             if (TryVariant(
                 () => MeasureCondition_T7_SO0(out _condition),
                 (idx, x, y) => MeasurePosition_T7_SO0(idx, x, y),
-                (idx, out Color c) => MeasurePixel_T7_SO0(idx, out c),
+                MeasurePixel_T7_SO0,
                 "T7", "SO0", "ve_*", ".so.0")) return true;
 
             // Test Tizen 9+ variant A (tizen_ve_*) with all library paths
             if (TryVariant(
                 () => MeasureCondition_T9A_SO(out _condition),
                 (idx, x, y) => MeasurePosition_T9A_SO(idx, x, y),
-                (idx, out Color c) => MeasurePixel_T9A_SO(idx, out c),
+                MeasurePixel_T9A_SO,
                 "T9A", "SO", "tizen_ve_*", ".so")) return true;
             if (TryVariant(
                 () => MeasureCondition_T9A_SO010(out _condition),
                 (idx, x, y) => MeasurePosition_T9A_SO010(idx, x, y),
-                (idx, out Color c) => MeasurePixel_T9A_SO010(idx, out c),
+                MeasurePixel_T9A_SO010,
                 "T9A", "SO010", "tizen_ve_*", ".so.0.1.0")) return true;
             if (TryVariant(
                 () => MeasureCondition_T9A_SO0(out _condition),
                 (idx, x, y) => MeasurePosition_T9A_SO0(idx, x, y),
-                (idx, out Color c) => MeasurePixel_T9A_SO0(idx, out c),
+                MeasurePixel_T9A_SO0,
                 "T9A", "SO0", "tizen_ve_*", ".so.0")) return true;
 
             // Test Tizen 9+ variant B (samsung_ve_*) with all library paths
             if (TryVariant(
                 () => MeasureCondition_T9B_SO(out _condition),
                 (idx, x, y) => MeasurePosition_T9B_SO(idx, x, y),
-                (idx, out Color c) => MeasurePixel_T9B_SO(idx, out c),
+                MeasurePixel_T9B_SO,
                 "T9B", "SO", "samsung_ve_*", ".so")) return true;
             if (TryVariant(
                 () => MeasureCondition_T9B_SO010(out _condition),
                 (idx, x, y) => MeasurePosition_T9B_SO010(idx, x, y),
-                (idx, out Color c) => MeasurePixel_T9B_SO010(idx, out c),
+                MeasurePixel_T9B_SO010,
                 "T9B", "SO010", "samsung_ve_*", ".so.0.1.0")) return true;
             if (TryVariant(
                 () => MeasureCondition_T9B_SO0(out _condition),
                 (idx, x, y) => MeasurePosition_T9B_SO0(idx, x, y),
-                (idx, out Color c) => MeasurePixel_T9B_SO0(idx, out c),
+                MeasurePixel_T9B_SO0,
                 "T9B", "SO0", "samsung_ve_*", ".so.0")) return true;
 
             // Test Tizen 9+ variant C (no prefix) with all library paths
             if (TryVariant(
                 () => MeasureCondition_T9C_SO(out _condition),
                 (idx, x, y) => MeasurePosition_T9C_SO(idx, x, y),
-                (idx, out Color c) => MeasurePixel_T9C_SO(idx, out c),
+                MeasurePixel_T9C_SO,
                 "T9C", "SO", "no prefix", ".so")) return true;
             if (TryVariant(
                 () => MeasureCondition_T9C_SO010(out _condition),
                 (idx, x, y) => MeasurePosition_T9C_SO010(idx, x, y),
-                (idx, out Color c) => MeasurePixel_T9C_SO010(idx, out c),
+                MeasurePixel_T9C_SO010,
                 "T9C", "SO010", "no prefix", ".so.0.1.0")) return true;
             if (TryVariant(
                 () => MeasureCondition_T9C_SO0(out _condition),
                 (idx, x, y) => MeasurePosition_T9C_SO0(idx, x, y),
-                (idx, out Color c) => MeasurePixel_T9C_SO0(idx, out c),
+                MeasurePixel_T9C_SO0,
                 "T9C", "SO0", "no prefix", ".so.0")) return true;
 
             // All combinations failed
@@ -438,10 +438,12 @@ namespace HyperTizen.Capture
         /// Try a specific API variant + library path combination
         /// Tests ALL 3 entry points to ensure complete API surface exists
         /// </summary>
+        private delegate int MeasurePixelDelegate(int index, out Color color);
+
         private bool TryVariant(
             Func<int> conditionFunc,
             Func<int, int, int, int> positionFunc,
-            Func<int, out Color, int> pixelFunc,
+            MeasurePixelDelegate pixelFunc,
             string variant,
             string libPath,
             string entryPrefix,
