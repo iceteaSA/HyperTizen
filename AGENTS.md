@@ -34,15 +34,10 @@ Before making ANY changes, read these files IN THIS ORDER:
    - Key files for each area of expertise
    - Common workflows and troubleshooting
 
-3. **Technical Documentation** (as needed):
-   - `TIZEN8_CAPTURE_API.md` - T8 vtable implementation details
-   - `VTABLE_ANALYSIS.md` - Reverse engineering notes
-   - `CAPTURE_BLOCKED_ANALYSIS.md` - Why APIs are blocked
-   - `WEBSOCKET_LOGS.md` - Log viewer technical details
-   - `ALTERNATIVE_SCANNER.md` - Library scanning efforts
-
-4. **Historical Reference** (archived):
-   - `docs/archive/HANDOFF_FOR_NEXT_CLAUDE.md` - Historical development notes (OUTDATED - see archive note in file)
+3. **Source Code** (as needed):
+   - Review capture method implementations in `HyperTizen/Capture/`
+   - Study native interop patterns in `HyperTizen/SDK/`
+   - Analyze error handling in `HyperTizen/Helper/`
 
 ---
 
@@ -108,7 +103,6 @@ Three Capture Methods (Priority Order):
 - **`HyperTizen/Capture/PixelSamplingCaptureMethod.cs`** - Pixel sampling (WORKING)
 
 **Core Services:**
-- **`HyperTizen/SDK/LibraryScanner.cs`** - Safe library probing with dlopen/dlsym
 - **`HyperTizen/LogWebSocketServer.cs`** - WebSocket log streaming
 - **`HyperTizen/HyperionClient.cs`** - Main application loop + 10-step startup
 - **`HyperTizen/Preferences.cs`** - Runtime configuration (includes DIAGNOSTIC_MODE)
@@ -143,21 +137,20 @@ Runtime-configurable via `Preferences.DiagnosticMode`:
 ### Adding New Capture Methods
 
 **Workflow:**
-1. Read README.md and technical docs for known working/blocked methods
-2. Use `LibraryScanner.cs` patterns for safe dlopen/dlsym probing
-3. Check library blacklist (crashes common on Tizen)
-4. Write P/Invoke declarations with ARM Cdecl convention
+1. Read README.md for known working/blocked methods
+2. Design safe P/Invoke declarations with ARM Cdecl convention
+3. Implement dlopen/dlsym validation before use
+4. Add proper error handling and logging
 5. Test on actual TV hardware via WebSocket logs
-6. Document in appropriate .md file
+6. Document in README.md
 
 **Key files:**
-- `HyperTizen/SDK/LibraryScanner.cs` - Safe library loading patterns
 - `references/GetCaptureFromTZ.c` - Decompiled Samsung code showing working implementation
 - `references/2.webp` - Library export screenshot
 
 **Safety rules:**
 - Always use dlopen before DllImport to avoid crashes
-- Check library blacklist in LibraryScanner.cs
+- Check for known blacklisted libraries (graphics libraries, Wayland, etc.)
 - Use timeouts on filesystem searches (app crashes easily)
 - Test with small allocations first
 - Never assume API works - verify on hardware
@@ -167,18 +160,17 @@ Runtime-configurable via `Preferences.DiagnosticMode`:
 **Workflow:**
 1. Review WebSocket logs at `http://<TV_IP>:45678`
 2. Analyze error codes (see reference below)
-3. Check if library is blacklisted in `LibraryScanner.cs`
-4. Review CAPTURE_BLOCKED_ANALYSIS.md for known firmware blocks
-5. Verify struct layouts and marshaling
-6. Test with diagnostic mode enabled
+3. Check README.md for known firmware blocks and issues
+4. Verify struct layouts and marshaling
+5. Test with diagnostic mode enabled
 
 **Key files:**
 - `logs.html` - Real-time log viewer
 - `HyperTizen/Helper/Log.cs` - Logging infrastructure
-- `WEBSOCKET_LOGS.md` - Debugging guide
+- `README.md` - Known issues and solutions
 
 **Common crash causes:**
-- Library scanning with too many filesystem operations
+- Unsafe library loading without dlopen/dlsym validation
 - Loading blacklisted libraries (libgfx-*, libwayland*, etc.)
 - Incorrect struct layouts causing memory corruption
 - Missing error handling on native calls
@@ -286,7 +278,7 @@ if (handle != IntPtr.Zero)
 
 Many Tizen libraries crash when loaded due to undefined symbols or initialization requirements.
 
-**Known blacklist** (from LibraryScanner.cs):
+**Known blacklist** (libraries that commonly crash):
 - `libgfx-video-output` - Undefined symbol crashes
 - `libgfx-*` - Graphics libs unstable
 - `libscreen_connector` - Undefined symbols
@@ -341,13 +333,6 @@ The `.agents` file defines specialized agents for different aspects of the proje
 - ARM calling conventions
 - *When:* Writing native interop, debugging marshaling, memory corruption issues
 
-**@library-scanner**
-- Finding alternative capture APIs
-- Symbol searching with nm/strings
-- Library blacklist management
-- Safe library testing
-- *When:* Discovering new methods, analyzing library exports, testing new libraries
-
 **@documentation-writer**
 - Updating README.md and AGENTS.md
 - Technical documentation
@@ -357,13 +342,12 @@ The `.agents` file defines specialized agents for different aspects of the proje
 
 ### Common Workflows
 
-**New Capture Method Discovery:**
+**Testing New Capture Method:**
 ```
-1. @library-scanner - Find promising libraries and symbols
-2. @native-interop-expert - Write safe P/Invoke declarations
-3. @tizen-capture-expert - Implement capture logic
-4. @debugging-assistant - Test via WebSocket logs
-5. @documentation-writer - Document the method
+1. @native-interop-expert - Write safe P/Invoke declarations
+2. @tizen-capture-expert - Implement capture logic
+3. @debugging-assistant - Test via WebSocket logs
+4. @documentation-writer - Document the method
 ```
 
 **Debugging Crash:**
@@ -512,10 +496,9 @@ Unless explicitly required or fixing bugs, avoid modifying:
 
 ### What You CAN Modify
 
-- **SecVideoCapture.cs** - T8 API experiments (already blocked anyway)
-- **LibraryScanner.cs** - Improving library search
+- **Capture method implementations** - T8 API, T7 API, or new methods
 - **Log.cs** - Adding logging features
-- **DiagnosticCapture.cs** - Testing and diagnostics
+- **Preferences.cs** - Adding new configuration options
 - **Documentation files** - Always keep these updated
 
 ---
@@ -549,10 +532,9 @@ This is important for continuity between development sessions.
    - Next steps for continuation
    - Any crash causes discovered
 
-2. **Update relevant technical docs**
-   - New discoveries in TIZEN8_CAPTURE_API.md
-   - Library findings in ALTERNATIVE_SCANNER.md
-   - Debugging insights in CAPTURE_BLOCKED_ANALYSIS.md
+2. **Update code comments and README**
+   - Add inline comments for any new discoveries
+   - Update README.md with new findings or blockers
 
 3. **Be honest and factual**
    - Don't be optimistic about blocked features
@@ -609,12 +591,7 @@ Screenshot showing exported functions from `libvideo-capture-impl-sec.so`:
 ### Current Documentation
 - **README.md** - Project status and current state (read first!)
 - **AGENTS.md** - AI assistant guidance and workflows
-- **TIZEN8_CAPTURE_API.md** - T8 API technical details
-- **VTABLE_ANALYSIS.md** - Reverse engineering notes
-- **CAPTURE_BLOCKED_ANALYSIS.md** - Why APIs are blocked
-- **WEBSOCKET_LOGS.md** - Log viewer usage guide
-- **ALTERNATIVE_SCANNER.md** - Library scanning documentation
-- **docs/archive/HANDOFF_FOR_NEXT_CLAUDE.md** - Historical notes (OUTDATED)
+- **Source code comments** - Inline documentation in key files
 
 ---
 
@@ -731,11 +708,9 @@ curl http://<TV_IP>:45678
 /home/user/HyperTizen/HyperTizen/Capture/CaptureMethodSelector.cs  (Selection logic)
 /home/user/HyperTizen/HyperTizen/Capture/PixelSamplingCaptureMethod.cs  (WORKING)
 /home/user/HyperTizen/HyperTizen/Capture/T8SdkCaptureMethod.cs  (T8 - BLOCKED)
-/home/user/HyperTizen/HyperTizen/SDK/LibraryScanner.cs
 /home/user/HyperTizen/HyperTizen/HyperionClient.cs  (10-step startup flow)
 /home/user/HyperTizen/logs.html  (WebSocket viewer)
 /home/user/HyperTizen/references/GetCaptureFromTZ.c  (Decompiled reference)
-/home/user/HyperTizen/docs/archive/HANDOFF_FOR_NEXT_CLAUDE.md  (ARCHIVED/OUTDATED)
 ```
 
 ---
@@ -743,11 +718,10 @@ curl http://<TV_IP>:45678
 ## For More Information
 
 - **Specialized workflows:** See `.agents` file for detailed agent definitions
-- **Technical deep dives:** Read the technical .md files in the repo
 - **Current status:** Always check README.md
 - **Debugging:** Use WebSocket logs at `http://<TV_IP>:45678`
 - **Questions:** Reference the appropriate agent (@tizen-capture-expert, etc.)
-- **Historical context:** Optionally reference `docs/archive/HANDOFF_FOR_NEXT_CLAUDE.md` (OUTDATED)
+- **Source code:** Review inline comments and capture method implementations
 
 ---
 

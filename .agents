@@ -24,9 +24,6 @@ agents:
       - /home/user/HyperTizen/HyperTizen/SDK/VideoEnhanceCapture.cs
       - /home/user/HyperTizen/HyperTizen/SDK/SecVideoCapture.cs
       - /home/user/HyperTizen/HyperTizen/VideoCapture.cs
-      - /home/user/HyperTizen/TIZEN8_CAPTURE_API.md
-      - /home/user/HyperTizen/VTABLE_ANALYSIS.md
-      - /home/user/HyperTizen/CAPTURE_BLOCKED_ANALYSIS.md
       - /home/user/HyperTizen/references/GetCaptureFromTZ.c
 
     common_tasks:
@@ -52,9 +49,7 @@ agents:
       VideoEnhance pixel sampling (libvideoenhance.so), which samples
       individual RGB pixels rather than capturing full frames. The T8 vtable
       API (libvideo-capture.so) is blocked by firmware (-95 error). The T7
-      API (libsec-video-capture.so.0) doesn't exist on Tizen 8.0+. When
-      working on capture issues, always reference HANDOFF_FOR_NEXT_CLAUDE.md
-      for the latest status and known issues.
+      API (libsec-video-capture.so.0) doesn't exist on Tizen 8.0+.
 
   - name: debugging-assistant
     description: >
@@ -77,7 +72,6 @@ agents:
       - /home/user/HyperTizen/logs.html
       - /home/user/HyperTizen/HyperTizen/LogWebSocketServer.cs
       - /home/user/HyperTizen/HyperTizen/Helper/Log.cs
-      - /home/user/HyperTizen/WEBSOCKET_LOGS.md
       - /home/user/HyperTizen/HyperTizen/HyperionClient.cs
       - /home/user/HyperTizen/HyperTizen/DiagnosticCapture.cs
 
@@ -114,7 +108,6 @@ agents:
       5. Check for error codes and match against known issues
       6. Use TV notifications for status updates
       7. If needed, SSH to TV for deeper inspection
-      8. Reference HANDOFF_FOR_NEXT_CLAUDE.md for known issues
 
     context: >
       HyperTizen uses a WebSocket log server (port 8765) for real-time
@@ -145,7 +138,6 @@ agents:
     key_files:
       - /home/user/HyperTizen/HyperTizen/SDK/SecVideoCapture.cs
       - /home/user/HyperTizen/HyperTizen/SDK/VideoEnhanceCapture.cs
-      - /home/user/HyperTizen/HyperTizen/SDK/LibraryScanner.cs
       - /home/user/HyperTizen/HyperTizen/SDK/SystemInfo.cs
 
     common_tasks:
@@ -190,97 +182,9 @@ agents:
 
     context: >
       HyperTizen uses extensive P/Invoke to interact with Tizen native
-      libraries. All libraries use ARM Cdecl calling convention. LibraryScanner
-      uses dlopen/dlsym for safe symbol probing without crashing. Key structs:
+      libraries. All libraries use ARM Cdecl calling convention. Key structs:
       Info_t (56 bytes), InputParams, OutputParams (80 bytes), Color (12 bytes).
       Always test struct sizes against known values from decompiled code.
-
-  - name: library-scanner
-    description: >
-      Specialist in analyzing, extending, and using LibraryScanner.cs to
-      discover alternative capture methods. Expert at using nm, strings,
-      objdump, and symbol analysis to find hidden capture APIs.
-
-    expertise:
-      - Dynamic library analysis with dlopen/dlsym
-      - Symbol searching with nm and strings
-      - Blacklisting libraries that cause crashes
-      - Safe library loading with timeouts
-      - Finding alternative Samsung APIs
-      - Analyzing library dependencies with ldd
-      - Searching for capture-related symbols
-      - Testing library functions without crashing
-      - Decompiled code analysis (GetCaptureFromTZ.c)
-      - Comparing library exports across Tizen versions
-
-    key_files:
-      - /home/user/HyperTizen/HyperTizen/SDK/LibraryScanner.cs
-      - /home/user/HyperTizen/ALTERNATIVE_SCANNER.md
-      - /home/user/HyperTizen/references/GetCaptureFromTZ.c
-      - /home/user/HyperTizen/references/2.webp
-
-    common_tasks:
-      - Scanning /usr/lib for capture-related libraries
-      - Probing libraries for interesting symbols
-      - Adding libraries to blacklist if they crash
-      - Testing newly discovered functions safely
-      - Analyzing decompiled Samsung app code
-      - Finding vtable offsets in binaries
-      - Comparing symbol exports between TV models
-      - Documenting new capture methods
-
-    example_prompts:
-      - "Scan for all video-related libraries in /usr/lib"
-      - "Why does libgfx-video-output crash when loaded?"
-      - "Find all functions containing 'capture' or 'screen' in their name"
-      - "Analyze libdali-extension-tv-video-canvas.so for capture functions"
-      - "How can I safely test a newly discovered function?"
-      - "What libraries export getVideoMainYUV?"
-      - "Add a timeout to library scanning to prevent crashes"
-
-    known_libraries:
-      working:
-        - libvideoenhance.so: "VideoEnhance pixel sampling (WORKING)"
-
-      blocked:
-        - libvideo-capture.so.0.1.0: "T8 vtable API (firmware blocked -95)"
-        - libdali-extension-tv-video-canvas.so.0.1.0: "Has T7 functions but returns -95"
-
-      missing:
-        - libsec-video-capture.so.0: "T7 API (doesn't exist on Tizen 8)"
-        - libvideo-capture-impl-sec.so: "T8 impl (only on some models)"
-
-      blacklisted:
-        - libgfx-video-output: "Undefined symbol crashes"
-        - libgfx-*: "Graphics libs unstable"
-        - libscreen_connector: "Undefined symbols"
-        - libwayland*: "Wayland graphics issues"
-        - libgl*/libegl*/libvulkan*: "Graphics drivers"
-
-    symbol_patterns:
-      capture: ["capture", "Capture", "captureScreen", "capture_screen"]
-      frame: ["getFrame", "get_frame", "grabFrame", "screenshot"]
-      video: ["getVideo", "videoCapture", "getVideoMainYUV", "getVideoPostYUV"]
-      t7_api: ["secvideo_api_capture_screen", "secvideo_api_capture_screen_video_only"]
-      lock: ["Lock", "Unlock", "lock", "unlock"]
-
-    scanning_strategy: >
-      1. Test known working methods first (VideoEnhance)
-      2. Probe specific libraries with dlopen/dlsym (safe)
-      3. Search filesystem with timeouts to prevent hangs
-      4. Check blacklist before loading
-      5. Look for symbol patterns that indicate capture APIs
-      6. Test functions with small allocations first
-      7. Document findings in ALTERNATIVE_SCANNER.md
-      8. Reference decompiled code for implementation details
-
-    context: >
-      LibraryScanner is used to discover alternative capture methods when
-      primary APIs are blocked. It includes extensive error handling, library
-      blacklists, and timeouts. The scanner found that VideoEnhance is the
-      ONLY working method on Tizen 8.0+. Many libraries have capture symbols
-      but are blocked by Samsung firmware. Always test safely with dlopen
-      before DllImport to avoid crashes.
 
   - name: documentation-writer
     description: >
@@ -292,7 +196,6 @@ agents:
       - Technical writing for developer audience
       - Markdown formatting and structure
       - Documenting API discoveries and limitations
-      - Maintaining HANDOFF_FOR_NEXT_CLAUDE.md continuity
       - Writing clear troubleshooting guides
       - Documenting error codes and workarounds
       - Creating architecture diagrams (ASCII/Mermaid)
@@ -302,16 +205,9 @@ agents:
 
     key_files:
       - /home/user/HyperTizen/README.md
-      - /home/user/HyperTizen/HANDOFF_FOR_NEXT_CLAUDE.md
-      - /home/user/HyperTizen/TIZEN8_CAPTURE_API.md
-      - /home/user/HyperTizen/VTABLE_ANALYSIS.md
-      - /home/user/HyperTizen/WEBSOCKET_LOGS.md
-      - /home/user/HyperTizen/CAPTURE_BLOCKED_ANALYSIS.md
-      - /home/user/HyperTizen/ALTERNATIVE_SCANNER.md
       - /home/user/HyperTizen/docs/README.md
 
     common_tasks:
-      - Updating HANDOFF_FOR_NEXT_CLAUDE.md with latest progress
       - Documenting new capture methods in technical detail
       - Writing troubleshooting sections for common issues
       - Maintaining error code reference tables
@@ -321,44 +217,11 @@ agents:
       - Keeping documentation in sync with code changes
 
     example_prompts:
-      - "Update HANDOFF_FOR_NEXT_CLAUDE.md with the latest findings"
       - "Document the VideoEnhance capture method in detail"
       - "Create a troubleshooting guide for error code -95"
-      - "Write a technical overview of the vtable approach"
       - "Update README.md with current project status"
       - "Document all known error codes and their meanings"
       - "Add a 'Known Issues' section to the docs"
-
-    documentation_structure:
-      HANDOFF_FOR_NEXT_CLAUDE.md: >
-        Critical handoff document updated at end of each session.
-        Includes: Current Status, What Works, What's Blocked, Next Steps,
-        Recent Changes, Files Modified. Always factual, never optimistic.
-
-      TIZEN8_CAPTURE_API.md: >
-        Technical documentation of Tizen 8.0+ capture APIs.
-        Includes: API overview, vtable methods, struct layouts, error codes,
-        example usage, troubleshooting.
-
-      VTABLE_ANALYSIS.md: >
-        Detailed vtable analysis with memory addresses and offsets.
-        Includes: getInstance symbol, vtable dump, reference code comparison,
-        data structures, buffer calculations.
-
-      WEBSOCKET_LOGS.md: >
-        User guide for WebSocket log viewer.
-        Includes: Quick start, usage, troubleshooting, technical details,
-        example use cases.
-
-      CAPTURE_BLOCKED_ANALYSIS.md: >
-        Analysis of why certain capture methods are blocked.
-        Includes: Samsung firmware restrictions, error codes, workarounds,
-        timeline of attempts.
-
-      ALTERNATIVE_SCANNER.md: >
-        Documentation of library scanning efforts.
-        Includes: Libraries tested, symbols found, what works, blacklist,
-        future directions.
 
     writing_guidelines:
       - Use clear, direct language (developer audience)
@@ -372,21 +235,11 @@ agents:
       - Include "Next Steps" or "TODO" sections
       - Reference specific line numbers when citing code
 
-    handoff_best_practices: >
-      HANDOFF_FOR_NEXT_CLAUDE.md is THE MOST CRITICAL document. It must be
-      updated at the end of every session with: (1) What actually works,
-      (2) What is currently broken/blocked, (3) What was tried and failed,
-      (4) Immediate next steps, (5) Files modified with line numbers,
-      (6) Any crash causes or gotchas. Never be optimistic - if something
-      doesn't work, state it clearly. Future Claude instances depend on this.
-
     context: >
-      HyperTizen has extensive technical documentation across 7+ .md files.
-      Documentation must stay in sync with code as the project evolves.
-      HANDOFF_FOR_NEXT_CLAUDE.md is updated frequently as the primary
-      continuity mechanism. All docs target experienced C# developers working
-      on Tizen TV development. Documentation style is direct, technical, and
-      honest about limitations and Samsung firmware restrictions.
+      HyperTizen has technical documentation maintained in sync with code.
+      All docs target experienced C# developers working on Tizen TV
+      development. Documentation style is direct, technical, and honest
+      about limitations and Samsung firmware restrictions.
 
 # Global project context
 project:
@@ -408,15 +261,14 @@ usage: >
   Agents have context about specific files, error codes, and workflows.
 
   For complex tasks, you can invoke multiple agents:
-  Example: "I need @library-scanner to find new APIs, then @native-interop-expert
-  to write the P/Invoke declarations, and @documentation-writer to document it."
+  Example: "I need @tizen-capture-expert to analyze the capture issue, then
+  @native-interop-expert to check the P/Invoke declarations."
 
 # Common workflows
 workflows:
   new_capture_method:
-    agents: [library-scanner, native-interop-expert, tizen-capture-expert, documentation-writer]
+    agents: [native-interop-expert, tizen-capture-expert, documentation-writer]
     steps:
-      - "Use library-scanner to find promising libraries and symbols"
       - "Use native-interop-expert to write safe P/Invoke declarations"
       - "Use tizen-capture-expert to implement and test the capture logic"
       - "Use documentation-writer to document the new method"
@@ -431,17 +283,17 @@ workflows:
   end_of_session:
     agents: [documentation-writer]
     steps:
-      - "Update HANDOFF_FOR_NEXT_CLAUDE.md with session progress"
       - "Document any new discoveries in relevant .md files"
+      - "Update README.md with session progress"
       - "Note any crashes, blocks, or gotchas for next session"
 
 # Key references
 references:
   decompiled_code: /home/user/HyperTizen/references/GetCaptureFromTZ.c
   library_exports: /home/user/HyperTizen/references/2.webp
-  handoff_doc: /home/user/HyperTizen/HANDOFF_FOR_NEXT_CLAUDE.md
   websocket_viewer: /home/user/HyperTizen/logs.html
 
+agents:
   - name: tizen-ui-expert
     description: >
       Specialized in building TV-optimized user interfaces for Samsung Tizen TVs.
@@ -575,7 +427,7 @@ references:
 
 # Quick troubleshooting
 troubleshooting:
-  app_crashes_on_start: "Check HANDOFF_FOR_NEXT_CLAUDE.md for known crash causes. Often due to library scanning or unsafe dlopen calls."
+  app_crashes_on_start: "Often due to unsafe dlopen calls or library loading issues. Check logs.html for details."
   error_minus_95: "Samsung firmware block. API exists but is intentionally disabled. Try alternative methods."
   error_minus_4: "DRM protected content (Netflix, HDCP). Cannot capture. Try HDMI input or non-DRM content."
   websocket_not_connecting: "Check TV IP address, ensure port 8765 is accessible, verify app is running."

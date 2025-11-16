@@ -179,19 +179,6 @@ The control panel is perfect for:
 
 ---
 
-## Technical Documentation
-
-Detailed technical documentation for developers:
-
-- **[ALTERNATIVE_SCANNER.md](./ALTERNATIVE_SCANNER.md)** - Comprehensive library scanner that searches for alternative capture methods
-- **[TIZEN8_CAPTURE_API.md](./TIZEN8_CAPTURE_API.md)** - Complete vtable-based T8 API implementation
-- **[CAPTURE_BLOCKED_ANALYSIS.md](./CAPTURE_BLOCKED_ANALYSIS.md)** - Analysis of why official APIs return `-95 EOPNOTSUPP`
-- **[VTABLE_ANALYSIS.md](./VTABLE_ANALYSIS.md)** - Reverse engineering notes on Tizen 8 virtual tables
-- **[WEBSOCKET_LOGS.md](./WEBSOCKET_LOGS.md)** - WebSocket log streaming implementation details
-- **[HANDOFF_FOR_NEXT_CLAUDE.md](./docs/archive/HANDOFF_FOR_NEXT_CLAUDE.md)** - *(ARCHIVED)* Historical development notes
-
----
-
 ## Installation
 
 To install HyperTizen, you need to have a Samsung TV running Tizen (works on both Tizen 7 and Tizen 8+, though capture methods differ).
