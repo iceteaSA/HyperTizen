@@ -266,6 +266,15 @@ namespace HyperTizen
                         {
                             Helper.Log.Write(Helper.eLogType.Info,
                                 $"CAPTURE METHOD SELECTED: {_selectedCaptureMethod.Name}");
+
+                            // Automatically enable capturing now that we have a working method
+                            // This ensures the capture loop will run even if preferences have Enabled=false
+                            if (!Globals.Instance.Enabled)
+                            {
+                                Helper.Log.Write(Helper.eLogType.Info,
+                                    "Auto-enabling capture (was disabled in preferences)");
+                                Globals.Instance.Enabled = true;
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -473,7 +482,6 @@ namespace HyperTizen
                             if (captureResult != null && captureResult.Success)
                             {
                                 var elapsedFPS = 1 / watchFPS.Elapsed.TotalSeconds;
-                                Helper.Log.Write(Helper.eLogType.Performance, "Capture FPS: " + elapsedFPS.ToString("F1"));
 
                                 // STEP 9: Initiate FlatBuffers connection (send frame)
                                 try

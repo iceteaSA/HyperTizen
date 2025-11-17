@@ -18,33 +18,41 @@ namespace HyperTizen.Capture
         private Condition _condition;
 
         // Track which API variant and library path works
-        private string _workingVariant = null; // T6, T7, T9A, T9B, T9C
-        private string _workingLibPath = null; // SO, SO010, SO0
+        private string _workingVariant = null; // T6, T7, T9A, T9B, T9C, T9 (ppi_ve_*)
+        private string _workingLibPath = null; // SO, SO0 (only .so and .so.0 exist on Tizen 9)
 
-        // Default 16-point sampling grid (normalized coordinates 0.0-1.0)
-        // Maps to screen edges for ambient lighting effect
+        // Pre-calculated pixel coordinates (calculated once during initialization)
+        private struct PixelCoordinate
+        {
+            public int X;
+            public int Y;
+        }
+        private PixelCoordinate[] _pixelCoordinates = null;
+
+        // 16-point sampling grid (normalized coordinates 0.0-1.0)
+        // 4 points per edge for better color representation
+        // With synchronized batching, we achieve 40 FPS even with 16 points
         private CapturePoint[] _capturedPoints = new CapturePoint[] {
-            // Top edge (4 points)
-            new CapturePoint(0.21, 0.05),
-            new CapturePoint(0.45, 0.05),
-            new CapturePoint(0.7, 0.05),
-            // Right edge (4 points)
-            new CapturePoint(0.93, 0.07),
-            new CapturePoint(0.95, 0.275),
-            new CapturePoint(0.95, 0.5),
-            new CapturePoint(0.95, 0.8),
-            // Bottom edge (4 points)
-            new CapturePoint(0.79, 0.95),
-            new CapturePoint(0.65, 0.95),
-            new CapturePoint(0.35, 0.95),
-            new CapturePoint(0.15, 0.95),
-            // Left edge (3 points)
-            new CapturePoint(0.05, 0.725),
-            new CapturePoint(0.05, 0.4),
-            new CapturePoint(0.05, 0.2),
-            // Center points (2 points)
-            new CapturePoint(0.35, 0.5),
-            new CapturePoint(0.65, 0.5)
+            // Top edge (4 points) - left to right
+            new CapturePoint(0.20, 0.05),
+            new CapturePoint(0.40, 0.05),
+            new CapturePoint(0.60, 0.05),
+            new CapturePoint(0.80, 0.05),
+            // Right edge (4 points) - top to bottom
+            new CapturePoint(0.95, 0.20),
+            new CapturePoint(0.95, 0.40),
+            new CapturePoint(0.95, 0.60),
+            new CapturePoint(0.95, 0.80),
+            // Bottom edge (4 points) - right to left
+            new CapturePoint(0.80, 0.95),
+            new CapturePoint(0.60, 0.95),
+            new CapturePoint(0.40, 0.95),
+            new CapturePoint(0.20, 0.95),
+            // Left edge (4 points) - bottom to top
+            new CapturePoint(0.05, 0.80),
+            new CapturePoint(0.05, 0.60),
+            new CapturePoint(0.05, 0.40),
+            new CapturePoint(0.05, 0.20)
         };
 
         public string Name => "Pixel Sampling";
@@ -64,17 +72,6 @@ namespace HyperTizen.Capture
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "cs_ve_get_rgb_measure_pixel")]
         private static extern int MeasurePixel_T6_SO(int index, out Color color);
-
-        // Library: /usr/lib/libvideoenhance.so.0.1.0
-        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
-            EntryPoint = "cs_ve_get_rgb_measure_condition")]
-        private static extern int MeasureCondition_T6_SO010(out Condition condition);
-        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
-            EntryPoint = "cs_ve_set_rgb_measure_position")]
-        private static extern int MeasurePosition_T6_SO010(int index, int x, int y);
-        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
-            EntryPoint = "cs_ve_get_rgb_measure_pixel")]
-        private static extern int MeasurePixel_T6_SO010(int index, out Color color);
 
         // Library: /usr/lib/libvideoenhance.so.0
         [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
@@ -100,17 +97,6 @@ namespace HyperTizen.Capture
             EntryPoint = "ve_get_rgb_measure_pixel")]
         private static extern int MeasurePixel_T7_SO(int index, out Color color);
 
-        // Library: /usr/lib/libvideoenhance.so.0.1.0
-        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
-            EntryPoint = "ve_get_rgb_measure_condition")]
-        private static extern int MeasureCondition_T7_SO010(out Condition condition);
-        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
-            EntryPoint = "ve_set_rgb_measure_position")]
-        private static extern int MeasurePosition_T7_SO010(int index, int x, int y);
-        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
-            EntryPoint = "ve_get_rgb_measure_pixel")]
-        private static extern int MeasurePixel_T7_SO010(int index, out Color color);
-
         // Library: /usr/lib/libvideoenhance.so.0
         [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "ve_get_rgb_measure_condition")]
@@ -134,17 +120,6 @@ namespace HyperTizen.Capture
         [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "tizen_ve_get_rgb_measure_pixel")]
         private static extern int MeasurePixel_T9A_SO(int index, out Color color);
-
-        // Library: /usr/lib/libvideoenhance.so.0.1.0
-        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
-            EntryPoint = "tizen_ve_get_rgb_measure_condition")]
-        private static extern int MeasureCondition_T9A_SO010(out Condition condition);
-        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
-            EntryPoint = "tizen_ve_set_rgb_measure_position")]
-        private static extern int MeasurePosition_T9A_SO010(int index, int x, int y);
-        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
-            EntryPoint = "tizen_ve_get_rgb_measure_pixel")]
-        private static extern int MeasurePixel_T9A_SO010(int index, out Color color);
 
         // Library: /usr/lib/libvideoenhance.so.0
         [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
@@ -170,17 +145,6 @@ namespace HyperTizen.Capture
             EntryPoint = "samsung_ve_get_rgb_measure_pixel")]
         private static extern int MeasurePixel_T9B_SO(int index, out Color color);
 
-        // Library: /usr/lib/libvideoenhance.so.0.1.0
-        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
-            EntryPoint = "samsung_ve_get_rgb_measure_condition")]
-        private static extern int MeasureCondition_T9B_SO010(out Condition condition);
-        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
-            EntryPoint = "samsung_ve_set_rgb_measure_position")]
-        private static extern int MeasurePosition_T9B_SO010(int index, int x, int y);
-        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
-            EntryPoint = "samsung_ve_get_rgb_measure_pixel")]
-        private static extern int MeasurePixel_T9B_SO010(int index, out Color color);
-
         // Library: /usr/lib/libvideoenhance.so.0
         [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "samsung_ve_get_rgb_measure_condition")]
@@ -205,17 +169,6 @@ namespace HyperTizen.Capture
             EntryPoint = "get_rgb_measure_pixel")]
         private static extern int MeasurePixel_T9C_SO(int index, out Color color);
 
-        // Library: /usr/lib/libvideoenhance.so.0.1.0
-        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
-            EntryPoint = "get_rgb_measure_condition")]
-        private static extern int MeasureCondition_T9C_SO010(out Condition condition);
-        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
-            EntryPoint = "set_rgb_measure_position")]
-        private static extern int MeasurePosition_T9C_SO010(int index, int x, int y);
-        [DllImport("/usr/lib/libvideoenhance.so.0.1.0", CallingConvention = CallingConvention.Cdecl,
-            EntryPoint = "get_rgb_measure_pixel")]
-        private static extern int MeasurePixel_T9C_SO010(int index, out Color color);
-
         // Library: /usr/lib/libvideoenhance.so.0
         [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "get_rgb_measure_condition")]
@@ -226,6 +179,30 @@ namespace HyperTizen.Capture
         [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
             EntryPoint = "get_rgb_measure_pixel")]
         private static extern int MeasurePixel_T9C_SO0(int index, out Color color);
+
+        // ===== Tizen 9 API (ppi_ve_* prefix) - CONFIRMED via analysis =====
+
+        // Library: /usr/lib/libvideoenhance.so
+        [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "ppi_ve_get_rgb_measure_condition")]
+        private static extern int MeasureCondition_T9_SO(out Condition condition);
+        [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "ppi_ve_set_rgb_measure_position")]
+        private static extern int MeasurePosition_T9_SO(int index, int x, int y);
+        [DllImport("/usr/lib/libvideoenhance.so", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "ppi_ve_get_rgb_measure_pixel")]
+        private static extern int MeasurePixel_T9_SO(int index, out Color color);
+
+        // Library: /usr/lib/libvideoenhance.so.0
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "ppi_ve_get_rgb_measure_condition")]
+        private static extern int MeasureCondition_T9_SO0(out Condition condition);
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "ppi_ve_set_rgb_measure_position")]
+        private static extern int MeasurePosition_T9_SO0(int index, int x, int y);
+        [DllImport("/usr/lib/libvideoenhance.so.0", CallingConvention = CallingConvention.Cdecl,
+            EntryPoint = "ppi_ve_get_rgb_measure_pixel")]
+        private static extern int MeasurePixel_T9_SO0(int index, out Color color);
 
         #endregion
 
@@ -307,6 +284,9 @@ namespace HyperTizen.Capture
 
                 if (success)
                 {
+                    // Pre-calculate coordinates during test
+                    PreCalculateCoordinates();
+
                     Helper.Log.Write(Helper.eLogType.Info,
                         $"PixelSampling Test: SUCCESS - Screen: {_condition.Width}x{_condition.Height}, " +
                         $"Points: {_condition.ScreenCapturePoints}, Sleep: {_condition.SleepMS}ms");
@@ -332,103 +312,84 @@ namespace HyperTizen.Capture
         /// </summary>
         private bool GetCondition()
         {
-            // TODO: DIAGNOSTIC - Remove struct size logging after verification
-            Helper.Log.Write(Helper.eLogType.Debug,
-                $"PixelSampling: Condition struct size: {Marshal.SizeOf<Condition>()} bytes");
-            Helper.Log.Write(Helper.eLogType.Debug,
-                $"PixelSampling: Color struct size: {Marshal.SizeOf<Color>()} bytes");
-
             Helper.Log.Write(Helper.eLogType.Info,
                 "PixelSampling: Testing ALL combinations of entry points and library paths...");
 
-            // Test Tizen 6 (cs_ve_*) with all library paths
+            // Test Tizen 6 (cs_ve_*) with existing library paths
             if (TryVariant(
                 () => MeasureCondition_T6_SO(out _condition),
                 (idx, x, y) => MeasurePosition_T6_SO(idx, x, y),
                 MeasurePixel_T6_SO,
                 "T6", "SO", "cs_ve_*", ".so")) return true;
             if (TryVariant(
-                () => MeasureCondition_T6_SO010(out _condition),
-                (idx, x, y) => MeasurePosition_T6_SO010(idx, x, y),
-                MeasurePixel_T6_SO010,
-                "T6", "SO010", "cs_ve_*", ".so.0.1.0")) return true;
-            if (TryVariant(
                 () => MeasureCondition_T6_SO0(out _condition),
                 (idx, x, y) => MeasurePosition_T6_SO0(idx, x, y),
                 MeasurePixel_T6_SO0,
                 "T6", "SO0", "cs_ve_*", ".so.0")) return true;
 
-            // Test Tizen 7 (ve_*) with all library paths
+            // Test Tizen 7 (ve_*) with existing library paths
             if (TryVariant(
                 () => MeasureCondition_T7_SO(out _condition),
                 (idx, x, y) => MeasurePosition_T7_SO(idx, x, y),
                 MeasurePixel_T7_SO,
                 "T7", "SO", "ve_*", ".so")) return true;
             if (TryVariant(
-                () => MeasureCondition_T7_SO010(out _condition),
-                (idx, x, y) => MeasurePosition_T7_SO010(idx, x, y),
-                MeasurePixel_T7_SO010,
-                "T7", "SO010", "ve_*", ".so.0.1.0")) return true;
-            if (TryVariant(
                 () => MeasureCondition_T7_SO0(out _condition),
                 (idx, x, y) => MeasurePosition_T7_SO0(idx, x, y),
                 MeasurePixel_T7_SO0,
                 "T7", "SO0", "ve_*", ".so.0")) return true;
 
-            // Test Tizen 9+ variant A (tizen_ve_*) with all library paths
+            // Test Tizen 9+ variant A (tizen_ve_*) with existing library paths
             if (TryVariant(
                 () => MeasureCondition_T9A_SO(out _condition),
                 (idx, x, y) => MeasurePosition_T9A_SO(idx, x, y),
                 MeasurePixel_T9A_SO,
                 "T9A", "SO", "tizen_ve_*", ".so")) return true;
             if (TryVariant(
-                () => MeasureCondition_T9A_SO010(out _condition),
-                (idx, x, y) => MeasurePosition_T9A_SO010(idx, x, y),
-                MeasurePixel_T9A_SO010,
-                "T9A", "SO010", "tizen_ve_*", ".so.0.1.0")) return true;
-            if (TryVariant(
                 () => MeasureCondition_T9A_SO0(out _condition),
                 (idx, x, y) => MeasurePosition_T9A_SO0(idx, x, y),
                 MeasurePixel_T9A_SO0,
                 "T9A", "SO0", "tizen_ve_*", ".so.0")) return true;
 
-            // Test Tizen 9+ variant B (samsung_ve_*) with all library paths
+            // Test Tizen 9+ variant B (samsung_ve_*) with existing library paths
             if (TryVariant(
                 () => MeasureCondition_T9B_SO(out _condition),
                 (idx, x, y) => MeasurePosition_T9B_SO(idx, x, y),
                 MeasurePixel_T9B_SO,
                 "T9B", "SO", "samsung_ve_*", ".so")) return true;
             if (TryVariant(
-                () => MeasureCondition_T9B_SO010(out _condition),
-                (idx, x, y) => MeasurePosition_T9B_SO010(idx, x, y),
-                MeasurePixel_T9B_SO010,
-                "T9B", "SO010", "samsung_ve_*", ".so.0.1.0")) return true;
-            if (TryVariant(
                 () => MeasureCondition_T9B_SO0(out _condition),
                 (idx, x, y) => MeasurePosition_T9B_SO0(idx, x, y),
                 MeasurePixel_T9B_SO0,
                 "T9B", "SO0", "samsung_ve_*", ".so.0")) return true;
 
-            // Test Tizen 9+ variant C (no prefix) with all library paths
+            // Test Tizen 9+ variant C (no prefix) with existing library paths
             if (TryVariant(
                 () => MeasureCondition_T9C_SO(out _condition),
                 (idx, x, y) => MeasurePosition_T9C_SO(idx, x, y),
                 MeasurePixel_T9C_SO,
                 "T9C", "SO", "no prefix", ".so")) return true;
             if (TryVariant(
-                () => MeasureCondition_T9C_SO010(out _condition),
-                (idx, x, y) => MeasurePosition_T9C_SO010(idx, x, y),
-                MeasurePixel_T9C_SO010,
-                "T9C", "SO010", "no prefix", ".so.0.1.0")) return true;
-            if (TryVariant(
                 () => MeasureCondition_T9C_SO0(out _condition),
                 (idx, x, y) => MeasurePosition_T9C_SO0(idx, x, y),
                 MeasurePixel_T9C_SO0,
                 "T9C", "SO0", "no prefix", ".so.0")) return true;
 
+            // Test Tizen 9 actual API (ppi_ve_*) - CONFIRMED via library analysis
+            if (TryVariant(
+                () => MeasureCondition_T9_SO(out _condition),
+                (idx, x, y) => MeasurePosition_T9_SO(idx, x, y),
+                MeasurePixel_T9_SO,
+                "T9", "SO", "ppi_ve_*", ".so")) return true;
+            if (TryVariant(
+                () => MeasureCondition_T9_SO0(out _condition),
+                (idx, x, y) => MeasurePosition_T9_SO0(idx, x, y),
+                MeasurePixel_T9_SO0,
+                "T9", "SO0", "ppi_ve_*", ".so.0")) return true;
+
             // All combinations failed
             Helper.Log.Write(Helper.eLogType.Error,
-                "PixelSampling: ALL 15 combinations failed (5 entry point variants × 3 library paths)");
+                "PixelSampling: ALL 12 combinations failed (6 entry point variants × 2 library paths)");
             Helper.Log.Write(Helper.eLogType.Error,
                 "PixelSampling: libvideoenhance.so does not support RGB pixel sampling on this Tizen version");
             return false;
@@ -525,20 +486,17 @@ namespace HyperTizen.Capture
             switch (key)
             {
                 case "T6_SO": return MeasurePosition_T6_SO(index, x, y);
-                case "T6_SO010": return MeasurePosition_T6_SO010(index, x, y);
                 case "T6_SO0": return MeasurePosition_T6_SO0(index, x, y);
                 case "T7_SO": return MeasurePosition_T7_SO(index, x, y);
-                case "T7_SO010": return MeasurePosition_T7_SO010(index, x, y);
                 case "T7_SO0": return MeasurePosition_T7_SO0(index, x, y);
                 case "T9A_SO": return MeasurePosition_T9A_SO(index, x, y);
-                case "T9A_SO010": return MeasurePosition_T9A_SO010(index, x, y);
                 case "T9A_SO0": return MeasurePosition_T9A_SO0(index, x, y);
                 case "T9B_SO": return MeasurePosition_T9B_SO(index, x, y);
-                case "T9B_SO010": return MeasurePosition_T9B_SO010(index, x, y);
                 case "T9B_SO0": return MeasurePosition_T9B_SO0(index, x, y);
                 case "T9C_SO": return MeasurePosition_T9C_SO(index, x, y);
-                case "T9C_SO010": return MeasurePosition_T9C_SO010(index, x, y);
                 case "T9C_SO0": return MeasurePosition_T9C_SO0(index, x, y);
+                case "T9_SO": return MeasurePosition_T9_SO(index, x, y);
+                case "T9_SO0": return MeasurePosition_T9_SO0(index, x, y);
                 default:
                     throw new InvalidOperationException($"Unknown variant: {key}");
             }
@@ -553,64 +511,79 @@ namespace HyperTizen.Capture
             switch (key)
             {
                 case "T6_SO": return MeasurePixel_T6_SO(index, out color);
-                case "T6_SO010": return MeasurePixel_T6_SO010(index, out color);
                 case "T6_SO0": return MeasurePixel_T6_SO0(index, out color);
                 case "T7_SO": return MeasurePixel_T7_SO(index, out color);
-                case "T7_SO010": return MeasurePixel_T7_SO010(index, out color);
                 case "T7_SO0": return MeasurePixel_T7_SO0(index, out color);
                 case "T9A_SO": return MeasurePixel_T9A_SO(index, out color);
-                case "T9A_SO010": return MeasurePixel_T9A_SO010(index, out color);
                 case "T9A_SO0": return MeasurePixel_T9A_SO0(index, out color);
                 case "T9B_SO": return MeasurePixel_T9B_SO(index, out color);
-                case "T9B_SO010": return MeasurePixel_T9B_SO010(index, out color);
                 case "T9B_SO0": return MeasurePixel_T9B_SO0(index, out color);
                 case "T9C_SO": return MeasurePixel_T9C_SO(index, out color);
-                case "T9C_SO010": return MeasurePixel_T9C_SO010(index, out color);
                 case "T9C_SO0": return MeasurePixel_T9C_SO0(index, out color);
+                case "T9_SO": return MeasurePixel_T9_SO(index, out color);
+                case "T9_SO0": return MeasurePixel_T9_SO0(index, out color);
                 default:
                     throw new InvalidOperationException($"Unknown variant: {key}");
             }
         }
 
         /// <summary>
+        /// Pre-calculate pixel coordinates from normalized positions
+        /// Called once during initialization to avoid repeated calculations
+        /// </summary>
+        private void PreCalculateCoordinates()
+        {
+            _pixelCoordinates = new PixelCoordinate[_capturedPoints.Length];
+
+            for (int i = 0; i < _capturedPoints.Length; i++)
+            {
+                // Convert normalized coordinates to pixel coordinates
+                int x = (int)(_capturedPoints[i].X * (double)_condition.Width) - _condition.PixelDensityX / 2;
+                int y = (int)(_capturedPoints[i].Y * (double)_condition.Height) - _condition.PixelDensityY / 2;
+
+                // Clamp coordinates to valid screen bounds
+                x = (x >= _condition.Width - _condition.PixelDensityX) ?
+                    _condition.Width - (_condition.PixelDensityX + 1) : x;
+                y = (y >= _condition.Height - _condition.PixelDensityY) ?
+                    (_condition.Height - _condition.PixelDensityY + 1) : y;
+
+                // Ensure coordinates are not negative
+                x = Math.Max(0, x);
+                y = Math.Max(0, y);
+
+                _pixelCoordinates[i].X = x;
+                _pixelCoordinates[i].Y = y;
+            }
+
+            Helper.Log.Write(Helper.eLogType.Info,
+                $"PixelSampling: Pre-calculated {_pixelCoordinates.Length} pixel coordinates");
+        }
+
+        /// <summary>
         /// Sample pixel colors from predefined screen positions
+        /// OPTIMIZED: Sets ALL positions first, then ONE sleep, then reads ALL pixels
+        /// This ensures all sampling happens at the same moment for temporal consistency
         /// </summary>
         private Color[] GetColors()
         {
             Color[] colorData = new Color[_capturedPoints.Length];
-            int[] updatedIndexes = new int[_condition.ScreenCapturePoints];
 
+            if (_condition.ScreenCapturePoints == 0)
+            {
+                Helper.Log.Write(Helper.eLogType.Error, "PixelSampling: ScreenCapturePoints is 0");
+                return colorData;
+            }
+
+            // PHASE 1: Set ALL measurement positions first (no delays between batches)
             int i = 0;
             while (i < _capturedPoints.Length)
             {
-                if (_condition.ScreenCapturePoints == 0)
-                {
-                    Helper.Log.Write(Helper.eLogType.Error, "PixelSampling: ScreenCapturePoints is 0");
-                    break;
-                }
-
-                // Set positions for batch sampling
+                // Set positions for this batch
                 for (int j = 0; j < _condition.ScreenCapturePoints && i < _capturedPoints.Length; j++)
                 {
-                    updatedIndexes[j] = i;
-
-                    // Convert normalized coordinates to pixel coordinates
-                    int x = (int)(_capturedPoints[i].X * (double)_condition.Width) - _condition.PixelDensityX / 2;
-                    int y = (int)(_capturedPoints[i].Y * (double)_condition.Height) - _condition.PixelDensityY / 2;
-
-                    // Clamp coordinates to valid screen bounds
-                    x = (x >= _condition.Width - _condition.PixelDensityX) ?
-                        _condition.Width - (_condition.PixelDensityX + 1) : x;
-                    y = (y >= _condition.Height - _condition.PixelDensityY) ?
-                        (_condition.Height - _condition.PixelDensityY + 1) : y;
-
-                    // Ensure coordinates are not negative
-                    x = Math.Max(0, x);
-                    y = Math.Max(0, y);
-
-                    Helper.Log.Write(Helper.eLogType.Debug,
-                        $"PixelSampling: Point {i} - Normalized: ({_capturedPoints[i].X:F2}, {_capturedPoints[i].Y:F2}), " +
-                        $"Pixel: ({x}, {y})");
+                    // Use pre-calculated pixel coordinates
+                    int x = _pixelCoordinates[i].X;
+                    int y = _pixelCoordinates[i].Y;
 
                     // Set the measurement position
                     int res = CallMeasurePosition(j, x, y);
@@ -623,24 +596,29 @@ namespace HyperTizen.Capture
 
                     i++;
                 }
+            }
 
-                // Sleep if required by the API
-                if (_condition.SleepMS > 0)
-                {
-                    Thread.Sleep(_condition.SleepMS);
-                }
+            // PHASE 2: Single sleep after ALL positions are set
+            // This ensures all measurements happen at approximately the same time
+            if (_condition.SleepMS > 0)
+            {
+                Thread.Sleep(_condition.SleepMS);
+            }
 
-                // Read the pixel colors
-                int k = 0;
-                while (k < _condition.ScreenCapturePoints && (i - _condition.ScreenCapturePoints + k) < _capturedPoints.Length)
+            // PHASE 3: Read ALL pixel colors in batches
+            i = 0;
+            while (i < _capturedPoints.Length)
+            {
+                // Read pixels for this batch
+                for (int j = 0; j < _condition.ScreenCapturePoints && i < _capturedPoints.Length; j++)
                 {
                     Color color;
-                    int res = CallMeasurePixel(k, out color);
+                    int res = CallMeasurePixel(j, out color);
 
                     if (res < 0)
                     {
                         Helper.Log.Write(Helper.eLogType.Error,
-                            $"PixelSampling: MeasurePixel failed for index {k} with error {res}");
+                            $"PixelSampling: MeasurePixel failed for point {i} with error {res}");
                         // Use black as fallback
                         color.R = 0;
                         color.G = 0;
@@ -655,33 +633,16 @@ namespace HyperTizen.Capture
                         if (invalidColorData)
                         {
                             Helper.Log.Write(Helper.eLogType.Warning,
-                                $"PixelSampling: Invalid color data at index {k}: R={color.R}, G={color.G}, B={color.B}");
+                                $"PixelSampling: Invalid color data at point {i}: R={color.R}, G={color.G}, B={color.B}");
                             // Clamp to valid range
                             color.R = Math.Max(0, Math.Min(1023, color.R));
                             color.G = Math.Max(0, Math.Min(1023, color.G));
                             color.B = Math.Max(0, Math.Min(1023, color.B));
                         }
-
-                        // TODO: DIAGNOSTIC - Remove color scaling comparison after verification
-                        // Log both clamping and scaling approaches to determine which is needed
-                        byte clampedR = (byte)Math.Min(color.R, 255);
-                        byte clampedG = (byte)Math.Min(color.G, 255);
-                        byte clampedB = (byte)Math.Min(color.B, 255);
-                        byte scaledR = (byte)Math.Min(255, color.R * 255 / 1023);
-                        byte scaledG = (byte)Math.Min(255, color.G * 255 / 1023);
-                        byte scaledB = (byte)Math.Min(255, color.B * 255 / 1023);
-
-                        Helper.Log.Write(Helper.eLogType.Debug,
-                            $"PixelSampling: Point {i - _condition.ScreenCapturePoints + k} color (10-bit): " +
-                            $"R={color.R}, G={color.G}, B={color.B}");
-                        Helper.Log.Write(Helper.eLogType.Debug,
-                            $"  → Clamped (8-bit): R={clampedR}, G={clampedG}, B={clampedB}");
-                        Helper.Log.Write(Helper.eLogType.Debug,
-                            $"  → Scaled  (8-bit): R={scaledR}, G={scaledG}, B={scaledB}");
                     }
 
-                    colorData[i - _condition.ScreenCapturePoints + k] = color;
-                    k++;
+                    colorData[i] = color;
+                    i++;
                 }
             }
 
@@ -711,13 +672,39 @@ namespace HyperTizen.Capture
                 rgbImage[i] = 0;
             }
 
-            // Top edge (first 4 colors)
+            // 16-point color mapping (4 points per edge)
+            // colors[0-3]   = Top edge (left to right)
+            // colors[4-7]   = Right edge (top to bottom)
+            // colors[8-11]  = Bottom edge (right to left)
+            // colors[12-15] = Left edge (bottom to top)
+
+            // Top edge (colors 0-3) with linear interpolation
             for (int x = 0; x < 64; x++)
             {
-                Color color = colors[x / 16]; // 0, 1, 2, 3
-                byte r = ClampTo8Bit(color.R);
-                byte g = ClampTo8Bit(color.G);
-                byte b = ClampTo8Bit(color.B);
+                // Determine which segment this x falls into (4 segments)
+                float segmentPos = (x / 63.0f) * 3.0f; // 0.0 to 3.0
+                int segment = Math.Min(2, (int)segmentPos); // 0, 1, or 2
+                float t = segmentPos - segment; // Position within segment (0.0 to 1.0)
+
+                byte r, g, b;
+                if (segment == 0) // colors[0] to colors[1]
+                {
+                    r = (byte)((1 - t) * ScaleTo8Bit(colors[0].R) + t * ScaleTo8Bit(colors[1].R));
+                    g = (byte)((1 - t) * ScaleTo8Bit(colors[0].G) + t * ScaleTo8Bit(colors[1].G));
+                    b = (byte)((1 - t) * ScaleTo8Bit(colors[0].B) + t * ScaleTo8Bit(colors[1].B));
+                }
+                else if (segment == 1) // colors[1] to colors[2]
+                {
+                    r = (byte)((1 - t) * ScaleTo8Bit(colors[1].R) + t * ScaleTo8Bit(colors[2].R));
+                    g = (byte)((1 - t) * ScaleTo8Bit(colors[1].G) + t * ScaleTo8Bit(colors[2].G));
+                    b = (byte)((1 - t) * ScaleTo8Bit(colors[1].B) + t * ScaleTo8Bit(colors[2].B));
+                }
+                else // segment == 2, colors[2] to colors[3]
+                {
+                    r = (byte)((1 - t) * ScaleTo8Bit(colors[2].R) + t * ScaleTo8Bit(colors[3].R));
+                    g = (byte)((1 - t) * ScaleTo8Bit(colors[2].G) + t * ScaleTo8Bit(colors[3].G));
+                    b = (byte)((1 - t) * ScaleTo8Bit(colors[2].B) + t * ScaleTo8Bit(colors[3].B));
+                }
 
                 for (int y = 0; y < 4; y++)
                 {
@@ -728,13 +715,33 @@ namespace HyperTizen.Capture
                 }
             }
 
-            // Bottom edge (colors 7-10)
+            // Bottom edge (colors 8-11) with linear interpolation (right to left)
             for (int x = 0; x < 64; x++)
             {
-                Color color = colors[x / 16 + 7]; // 7, 8, 9, 10
-                byte r = ClampTo8Bit(color.R);
-                byte g = ClampTo8Bit(color.G);
-                byte b = ClampTo8Bit(color.B);
+                // Determine which segment this x falls into (4 segments, reversed)
+                float segmentPos = (x / 63.0f) * 3.0f; // 0.0 to 3.0
+                int segment = Math.Min(2, (int)segmentPos); // 0, 1, or 2
+                float t = segmentPos - segment; // Position within segment (0.0 to 1.0)
+
+                byte r, g, b;
+                if (segment == 0) // colors[11] to colors[10]
+                {
+                    r = (byte)((1 - t) * ScaleTo8Bit(colors[11].R) + t * ScaleTo8Bit(colors[10].R));
+                    g = (byte)((1 - t) * ScaleTo8Bit(colors[11].G) + t * ScaleTo8Bit(colors[10].G));
+                    b = (byte)((1 - t) * ScaleTo8Bit(colors[11].B) + t * ScaleTo8Bit(colors[10].B));
+                }
+                else if (segment == 1) // colors[10] to colors[9]
+                {
+                    r = (byte)((1 - t) * ScaleTo8Bit(colors[10].R) + t * ScaleTo8Bit(colors[9].R));
+                    g = (byte)((1 - t) * ScaleTo8Bit(colors[10].G) + t * ScaleTo8Bit(colors[9].G));
+                    b = (byte)((1 - t) * ScaleTo8Bit(colors[10].B) + t * ScaleTo8Bit(colors[9].B));
+                }
+                else // segment == 2, colors[9] to colors[8]
+                {
+                    r = (byte)((1 - t) * ScaleTo8Bit(colors[9].R) + t * ScaleTo8Bit(colors[8].R));
+                    g = (byte)((1 - t) * ScaleTo8Bit(colors[9].G) + t * ScaleTo8Bit(colors[8].G));
+                    b = (byte)((1 - t) * ScaleTo8Bit(colors[9].B) + t * ScaleTo8Bit(colors[8].B));
+                }
 
                 for (int y = 44; y < 48; y++)
                 {
@@ -745,13 +752,33 @@ namespace HyperTizen.Capture
                 }
             }
 
-            // Left edge (colors 11-13)
+            // Left edge (colors 12-15) with linear interpolation (bottom to top)
             for (int y = 0; y < 48; y++)
             {
-                Color color = colors[11 + y / 16]; // 11, 12, 13
-                byte r = ClampTo8Bit(color.R);
-                byte g = ClampTo8Bit(color.G);
-                byte b = ClampTo8Bit(color.B);
+                // Determine which segment this y falls into (4 segments)
+                float segmentPos = (y / 47.0f) * 3.0f; // 0.0 to 3.0
+                int segment = Math.Min(2, (int)segmentPos); // 0, 1, or 2
+                float t = segmentPos - segment; // Position within segment (0.0 to 1.0)
+
+                byte r, g, b;
+                if (segment == 0) // colors[15] to colors[14]
+                {
+                    r = (byte)((1 - t) * ScaleTo8Bit(colors[15].R) + t * ScaleTo8Bit(colors[14].R));
+                    g = (byte)((1 - t) * ScaleTo8Bit(colors[15].G) + t * ScaleTo8Bit(colors[14].G));
+                    b = (byte)((1 - t) * ScaleTo8Bit(colors[15].B) + t * ScaleTo8Bit(colors[14].B));
+                }
+                else if (segment == 1) // colors[14] to colors[13]
+                {
+                    r = (byte)((1 - t) * ScaleTo8Bit(colors[14].R) + t * ScaleTo8Bit(colors[13].R));
+                    g = (byte)((1 - t) * ScaleTo8Bit(colors[14].G) + t * ScaleTo8Bit(colors[13].G));
+                    b = (byte)((1 - t) * ScaleTo8Bit(colors[14].B) + t * ScaleTo8Bit(colors[13].B));
+                }
+                else // segment == 2, colors[13] to colors[12]
+                {
+                    r = (byte)((1 - t) * ScaleTo8Bit(colors[13].R) + t * ScaleTo8Bit(colors[12].R));
+                    g = (byte)((1 - t) * ScaleTo8Bit(colors[13].G) + t * ScaleTo8Bit(colors[12].G));
+                    b = (byte)((1 - t) * ScaleTo8Bit(colors[13].B) + t * ScaleTo8Bit(colors[12].B));
+                }
 
                 for (int x = 0; x < 3; x++)
                 {
@@ -762,13 +789,33 @@ namespace HyperTizen.Capture
                 }
             }
 
-            // Right edge (colors 4-6)
+            // Right edge (colors 4-7) with linear interpolation (top to bottom)
             for (int y = 0; y < 48; y++)
             {
-                Color color = colors[4 + y / 16]; // 4, 5, 6
-                byte r = ClampTo8Bit(color.R);
-                byte g = ClampTo8Bit(color.G);
-                byte b = ClampTo8Bit(color.B);
+                // Determine which segment this y falls into (4 segments)
+                float segmentPos = (y / 47.0f) * 3.0f; // 0.0 to 3.0
+                int segment = Math.Min(2, (int)segmentPos); // 0, 1, or 2
+                float t = segmentPos - segment; // Position within segment (0.0 to 1.0)
+
+                byte r, g, b;
+                if (segment == 0) // colors[4] to colors[5]
+                {
+                    r = (byte)((1 - t) * ScaleTo8Bit(colors[4].R) + t * ScaleTo8Bit(colors[5].R));
+                    g = (byte)((1 - t) * ScaleTo8Bit(colors[4].G) + t * ScaleTo8Bit(colors[5].G));
+                    b = (byte)((1 - t) * ScaleTo8Bit(colors[4].B) + t * ScaleTo8Bit(colors[5].B));
+                }
+                else if (segment == 1) // colors[5] to colors[6]
+                {
+                    r = (byte)((1 - t) * ScaleTo8Bit(colors[5].R) + t * ScaleTo8Bit(colors[6].R));
+                    g = (byte)((1 - t) * ScaleTo8Bit(colors[5].G) + t * ScaleTo8Bit(colors[6].G));
+                    b = (byte)((1 - t) * ScaleTo8Bit(colors[5].B) + t * ScaleTo8Bit(colors[6].B));
+                }
+                else // segment == 2, colors[6] to colors[7]
+                {
+                    r = (byte)((1 - t) * ScaleTo8Bit(colors[6].R) + t * ScaleTo8Bit(colors[7].R));
+                    g = (byte)((1 - t) * ScaleTo8Bit(colors[6].G) + t * ScaleTo8Bit(colors[7].G));
+                    b = (byte)((1 - t) * ScaleTo8Bit(colors[6].B) + t * ScaleTo8Bit(colors[7].B));
+                }
 
                 for (int x = 61; x < 64; x++)
                 {
@@ -822,13 +869,13 @@ namespace HyperTizen.Capture
         }
 
         /// <summary>
-        /// Clamp 10-bit color value (0-1023) to 8-bit (0-255)
-        /// Note: This uses simple clamping, not scaling. Based on original implementation.
-        /// TODO: DIAGNOSTIC - Review log output to determine if scaling (value * 255 / 1023) is needed instead
+        /// Convert 10-bit color value (0-1023) to 8-bit (0-255) using proper scaling
+        /// Uses scaling rather than clamping to preserve color accuracy
         /// </summary>
-        private byte ClampTo8Bit(int value)
+        private byte ScaleTo8Bit(int value)
         {
-            return (byte)Math.Min(value, 255);
+            // Scale 10-bit (0-1023) to 8-bit (0-255)
+            return (byte)Math.Min(255, value * 255 / 1023);
         }
 
         /// <summary>
@@ -845,6 +892,10 @@ namespace HyperTizen.Capture
                     {
                         return CaptureResult.CreateFailure("PixelSampling: Failed to get condition");
                     }
+
+                    // Pre-calculate all pixel coordinates once
+                    PreCalculateCoordinates();
+
                     _isInitialized = true;
                 }
 

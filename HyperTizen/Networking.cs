@@ -122,10 +122,6 @@ namespace HyperTizen
 
                     Helper.Log.Write(Helper.eLogType.Info,
                         $"TCP: Sending {registrationMessage.Length} bytes with big-endian header...");
-                    Helper.Log.Write(Helper.eLogType.Debug,
-                        $"TCP: Header (big-endian size={registrationMessage.Length}): {BitConverter.ToString(header)}");
-                    Helper.Log.Write(Helper.eLogType.Debug,
-                        $"TCP: Message bytes: {BitConverter.ToString(registrationMessage)}");
 
                     _stream.Write(header, 0, header.Length);
                     _stream.Write(registrationMessage, 0, registrationMessage.Length);
@@ -157,9 +153,6 @@ namespace HyperTizen
 
         public static async Task SendImageAsync(byte[] yData, byte[] uvData, int width, int height)
         {
-            Helper.Log.Write(Helper.eLogType.Debug,
-                $"→ SendImageAsync: ENTRY - buffers Y={yData?.Length ?? 0} UV={uvData?.Length ?? 0}, size {width}x{height}");
-
             // ENHANCED NULL SAFETY: Check client validity before proceeding
             try
             {
@@ -216,7 +209,6 @@ namespace HyperTizen
                 return;
             }
 
-            Helper.Log.Write(Helper.eLogType.Debug, "SendImageAsync: Creating FlatBuffer message...");
             byte[] message = CreateFlatBufferMessage(yData, uvData, width, height);
             if (message == null)
             {
@@ -224,16 +216,9 @@ namespace HyperTizen
                 return;
             }
 
-            Helper.Log.Write(Helper.eLogType.Debug,
-                $"SendImageAsync: ✓ FlatBuffer created ({message.Length} bytes), queueing send...");
-
             // Fire-and-forget required to avoid blocking capture loop
             // Validation above ensures buffers are correct before sending
-            var watchFPS = System.Diagnostics.Stopwatch.StartNew();
             _ = SendMessageAndReceiveReplyAsync(message);
-            watchFPS.Stop();
-            Helper.Log.Write(Helper.eLogType.Debug,
-                $"SendImageAsync: ✓ Message queued for async send in {watchFPS.ElapsedMilliseconds}ms");
         }
         static byte[] CreateFlatBufferMessage(byte[] yData, byte[] uvData, int width, int height)
         {
@@ -315,9 +300,6 @@ namespace HyperTizen
                     $"CreateFlatBufferMessage: Invalid UV buffer size. Expected {expectedUVSize}, got {uvData.Length}");
                 return null;
             }
-
-            Helper.Log.Write(Helper.eLogType.Debug,
-                $"CreateFlatBufferMessage: Validated buffers (Y={yData.Length}, UV={uvData.Length}) for {width}x{height}");
 
             var builder = new FlatBufferBuilder(yData.Length + uvData.Length + 100);
 
@@ -403,32 +385,20 @@ namespace HyperTizen
 
             var originOffset = builder.CreateString("HyperTizen");
 
-            Helper.Log.Write(Helper.eLogType.Debug,
-                $"CreateRegistrationMessage: Building Register with origin='HyperTizen', priority=123");
-
             Register.StartRegister(builder);
             Register.AddPriority(builder, 123);
             Register.AddOrigin(builder, originOffset);
             var registerOffset = Register.EndRegister(builder);
-
-            Helper.Log.Write(Helper.eLogType.Debug,
-                $"CreateRegistrationMessage: Register offset={registerOffset.Value}");
 
             Request.StartRequest(builder);
             Request.AddCommandType(builder, Command.Register);
             Request.AddCommand(builder, registerOffset.Value);
             var requestOffset = Request.EndRequest(builder);
 
-            Helper.Log.Write(Helper.eLogType.Debug,
-                $"CreateRegistrationMessage: Request offset={requestOffset.Value}");
-
             // Use regular Finish (NOT FinishSizePrefixed)
             // HyperHDR expects big-endian size prefix which we'll add manually in SendRegister()
             builder.Finish(requestOffset.Value);
             byte[] message = builder.SizedByteArray();
-
-            Helper.Log.Write(Helper.eLogType.Debug,
-                $"CreateRegistrationMessage: Generated {message.Length} byte message (without size prefix)");
 
             return message;
         }
@@ -447,10 +417,6 @@ namespace HyperTizen
 
                     Helper.Log.Write(Helper.eLogType.Info, "ReadRegisterReply: Waiting for server reply...");
 
-                    // Log stream status for debugging
-                    Helper.Log.Write(Helper.eLogType.Debug,
-                        $"ReadRegisterReply: Stream readable={_stream.CanRead}, writable={_stream.CanWrite}, dataAvailable={_stream.DataAvailable}");
-
                     // Set read timeout to prevent infinite blocking
                     _stream.ReadTimeout = 5000; // 5 second timeout
 
@@ -465,13 +431,7 @@ namespace HyperTizen
                         Array.Copy(buffer, replyData, bytesRead);
 
                         // Log raw reply bytes for debugging
-                        Helper.Log.Write(Helper.eLogType.Debug,
-                            $"ReadRegisterReply: Raw bytes: {BitConverter.ToString(replyData)}");
-
                         Reply reply = ParseReply(replyData);
-
-                        Helper.Log.Write(Helper.eLogType.Debug,
-                            $"ReadRegisterReply: Parsed - Registered={reply.Registered}, Video={reply.Video}");
 
                         if (reply.Registered > 0)
                         {
@@ -501,8 +461,6 @@ namespace HyperTizen
 
                 Helper.Log.Write(Helper.eLogType.Error,
                     $"ReadRegisterReply TIMEOUT: {ex.Message}");
-                Helper.Log.Write(Helper.eLogType.Debug,
-                    $"ReadRegisterReply TIMEOUT: Stream state at timeout: {streamState}");
                 DisconnectClient();
             }
             catch (Exception ex)
@@ -535,8 +493,6 @@ namespace HyperTizen
                 Reply reply = ParseReply(replyData);
 
 
-                Helper.Log.Write(Helper.eLogType.Info, $"SendMessageAndReceiveReply: Reply_Video: {reply.Video}");
-                Helper.Log.Write(Helper.eLogType.Info, $"SendMessageAndReceiveReply: Reply_Registered: {reply.Registered}");
                 if (!string.IsNullOrEmpty(reply.Error))
                 {
                     Helper.Log.Write(Helper.eLogType.Error, "SendMessageAndReceiveReply: (closing tcp client now) Reply_Error: " + reply.Error);
@@ -557,16 +513,13 @@ namespace HyperTizen
         {
             try
             {
-                Helper.Log.Write(Helper.eLogType.Debug,
-                    $"  → SendMessageAndReceiveReplyAsync: ENTRY with {message.Length} byte message");
-
                 NetworkStream localStream;
                 lock (_lock)
                 {
                     if (_client == null || !_client.Connected || _stream == null)
                     {
                         Helper.Log.Write(Helper.eLogType.Warning,
-                            $"  → SendMessageAndReceiveReplyAsync: ❌ Connection not ready (client={_client != null}, connected={_client?.Connected ?? false}, stream={_stream != null})");
+                            $"SendMessageAndReceiveReplyAsync: Connection not ready");
                         return;
                     }
                     localStream = _stream;
@@ -579,15 +532,9 @@ namespace HyperTizen
                 header[2] = (byte)((message.Length >> 8) & 0xFF);
                 header[3] = (byte)(message.Length & 0xFF);
 
-                Helper.Log.Write(Helper.eLogType.Debug,
-                    $"  → SendMessageAndReceiveReplyAsync: Writing {message.Length} bytes to HyperHDR...");
-
                 await localStream.WriteAsync(header, 0, header.Length);
                 await localStream.WriteAsync(message, 0, message.Length);
                 await localStream.FlushAsync();
-
-                Helper.Log.Write(Helper.eLogType.Info,
-                    $"  → SendMessageAndReceiveReplyAsync: ✓ Frame sent to HyperHDR ({message.Length} bytes)");
 
                 _ = ReadImageReply();
             }
