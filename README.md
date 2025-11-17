@@ -11,24 +11,7 @@ This project **doesn't actually work yet** (or may only partially work). It star
 
 If you somehow find this useful, or just want to support questionable AI-driven development practices:
 
-**[☕ Buy me a coffee](https://ko-fi.com/H2H719VB0U)**
-
----
-
-<p align="center">
-    <a href="https://discord.gg/m2P7v8Y2qR">
-       <picture>
-           <source height="24px" media="(prefers-color-scheme: dark)" srcset="https://user-images.githubusercontent.com/13122796/178032563-d4e084b7-244e-4358-af50-26bde6dd4996.png" />
-           <img height="24px" src="https://user-images.githubusercontent.com/13122796/178032563-d4e084b7-244e-4358-af50-26bde6dd4996.png" />
-       </picture>
-       </a>
-       <a href="https://www.youtube.com/@tizenbrew">
-      <picture>
-         <source height="24px" media="(prefers-color-scheme: dark)" srcset="https://user-images.githubusercontent.com/13122796/178032714-c51c7492-0666-44ac-99c2-f003a695ab50.png" />
-         <img height="24px" src="https://user-images.githubusercontent.com/13122796/178032714-c51c7492-0666-44ac-99c2-f003a695ab50.png" />
-     </picture>
-     </a>
-</p>
+**[☕ Buy me a coffee/AI credits](https://ko-fi.com/H2H719VB0U)**
 
 ---
 
@@ -45,6 +28,7 @@ This fork is focused on implementing screen capture functionality for **Tizen 8.
 - Converts 10-bit RGB to NV12 format for FlatBuffers transmission
 - Supports both Tizen 6 and Tizen 7+ API variants
 - Requires hardware testing to verify color accuracy and coordinate mapping
+- Pretty bad performance, but it works! Sorta. Basically takes the dominant color on the screen. And flickering.
 
 **⚠️ Other Capture Methods**: T8SDK and T7SDK remain as scaffolding (not yet implemented)
 
@@ -60,7 +44,7 @@ This fork includes a **real-time browser-based log viewer** that's essential for
 
 1. **Start HyperTizen** on your TV
 2. **Open your browser** on any device on the same network
-3. **Navigate to:** `http://<YOUR_TV_IP>:45678`
+3. **Enter your IP:** `<YOUR_TV_IP>`, `45678`
 4. The log viewer will automatically connect and display real-time logs
 
 ### Log Viewer Features
@@ -84,7 +68,7 @@ Or use your router's admin panel to find connected devices.
 http://192.168.1.100:45678
 ```
 
-The log viewer (`logs.html`) is served automatically when HyperTizen is running. This is particularly useful for debugging capture issues, monitoring performance, and understanding what's happening on the TV without needing SSH or console access.
+The log viewer (`logs.html`). This is particularly useful for debugging capture issues, monitoring performance, and understanding what's happening on the TV.
 
 ---
 
@@ -95,10 +79,9 @@ In addition to logs, HyperTizen provides a **full control panel** accessible fro
 ### Accessing the Control Panel
 
 1. **Start HyperTizen** on your TV
-2. **Open your browser** on any device on the same network
+2. **Open on your browser** on any device on the same network
 3. **Open the control panel:**
-   - **Option 1**: Navigate to `http://<YOUR_TV_IP>:45678/controls.html`
-   - **Option 2**: Download `controls.html` from this repository and open it locally, then enter your TV's IP
+   - Download `controls.html` from this repository and open it locally, then enter your TV's IP
 
 ### Control Panel Features
 
@@ -129,11 +112,8 @@ The control panel (`controls.html`) provides the same functionality as the Hyper
 
 ### Example
 
-```
-http://192.168.1.100:45678/controls.html
-```
 
-Or open `controls.html` locally and enter:
+Open `controls.html` locally and enter:
 ```
 TV IP: 192.168.1.100
 Control Port: 45677
@@ -163,7 +143,7 @@ The control panel is perfect for:
   - 10-bit to 8-bit RGB conversion
   - RGB to NV12 color space conversion
   - FlatBuffers integration for HyperHDR/Hyperion
-  - **Status**: Code complete, awaiting hardware testing
+  - **Status**: Code complete, terrible
 
 ### Partially Implemented
 
@@ -173,32 +153,21 @@ The control panel is perfect for:
 ### Known Issues & Testing Needed
 
 **Pixel Sampling Method:**
-- ⚠️ **Color accuracy**: Original implementation had color detection issues (red→yellow) - needs verification on actual hardware
-- ⚠️ **Coordinate mapping**: Original had inverted bottom/left zones - improved bounds checking added but needs testing
-- ⚠️ **Performance**: Pixel sampling is slower than frame capture - actual FPS unknown until hardware testing
-- ⚠️ **10-bit clamping**: Uses simple clamping (not scaling) from 10-bit to 8-bit - may need adjustment based on testing
+- ⚠️ **Color accuracy**: Basically takes the dominant color on the screen
+- **Flickering**: Random white flicker now and then
 
 ### Testing the Pixel Sampling Implementation
 
 To test the pixel sampling capture method on your Tizen 8.0+ TV:
 
 1. **Build and install** the updated HyperTizen package on your TV
-2. **Start the service** and monitor via WebSocket logs at `http://<TV_IP>:45678`
+2. **Start the service** and monitor via WebSocket logs
 3. **Watch for log messages** showing:
    - `PixelSampling: Library found, available`
-   - `PixelSampling Test: SUCCESS - Screen: WxH, Points: N`
    - Color values being sampled (10-bit RGB)
 4. **Connect to HyperHDR/Hyperion** and verify ambient lighting displays correctly
 5. **Test color accuracy**: Display pure colors (red, green, blue) and verify they appear correctly
 6. **Test edge mapping**: Move content along edges and verify LEDs respond in correct direction
-
-**What to report:**
-- Screen resolution detected
-- Number of capture points supported
-- Sleep time required by API
-- Color accuracy (any red→yellow issues?)
-- Coordinate mapping (any inverted edges?)
-- Performance (FPS achieved)
 
 ### Research Notes on Tizen 8.0+ Capture
 
